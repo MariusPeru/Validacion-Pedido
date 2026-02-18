@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validación de Pedidos | Portal Seguro</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- OCR Library -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+
+    <!-- Alerts -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+
+<body>
+
+    <!-- Background Elements -->
+    <div class="bg-gradient"></div>
+    <div class="bg-blur"></div>
+
+    <!-- Login Section -->
+    <section id="login-section" class="active-section">
+        <div class="login-card glass-panel">
+            <div class="login-header">
+                <div class="logo-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                <h1>Portal de Validación</h1>
+                <p>Ingrese sus credenciales para acceder</p>
+            </div>
+            <form id="login-form">
+                <div class="input-group">
+                    <i class="fa-regular fa-user"></i>
+                    <input type="text" id="username" placeholder="Usuario" required autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="password" placeholder="Contraseña" required
+                        autocomplete="current-password">
+                </div>
+                <!-- URL de API (Guardada en localStorage para facilitar configuración) -->
+                <div class="input-group api-group">
+                    <i class="fa-solid fa-link"></i>
+                    <input type="text" id="api-url" placeholder="URL del Script de Google (API)" required>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <span>Ingresar</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </form>
+            <div class="loading-overlay" id="login-loading">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- App Dashboard Section -->
+    <section id="app-section">
+        <!-- Sidebar / Navigation -->
+        <nav class="sidebar glass-panel">
+            <div class="nav-brand">
+                <i class="fa-solid fa-cube"></i>
+                <span>Gestión</span>
+            </div>
+            <div class="user-profile">
+                <div class="avatar"><i class="fa-solid fa-user"></i></div>
+                <div class="user-info">
+                    <span id="user-name-display">Usuario</span>
+                    <small>Validador</small>
+                </div>
+            </div>
+            <ul class="nav-links">
+                <li class="active"><a href="#"><i class="fa-solid fa-table-list"></i> Pedidos</a></li>
+                <!-- Future links could go here -->
+            </ul>
+            <button id="logout-btn" class="logout-link">
+                <i class="fa-solid fa-right-from-bracket"></i> Salir
+            </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-bar glass-panel">
+                <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center; flex: 1;">
+                    <input type="date" id="date-filter" class="search-input"
+                        style="width: auto; padding: 8px 12px; color-scheme: dark; background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+
+                    <div class="search-wrapper" style="position: relative; flex: 1; max-width: 300px;">
+                        <i class="fa-solid fa-magnifying-glass"
+                            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.5); pointer-events: none;"></i>
+                        <input type="text" id="search-input" class="search-input" placeholder="Buscar por llave, nro..."
+                            style="padding-left: 38px; width: 100%;">
+                    </div>
+                </div>
+                <button id="refresh-btn" class="btn-icon" title="Actualizar datos">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+                <button id="new-order-btn" class="btn-primary">
+                    <i class="fa-solid fa-plus"></i> Nuevo Pedido
+                </button>
+            </header>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card glass-panel">
+                    <div class="stat-icon combined"><i class="fa-solid fa-layer-group"></i></div>
+                    <div class="stat-info">
+                        <h3>Total Pedidos</h3>
+                        <span id="stat-total">0</span>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel">
+                    <div class="stat-icon pending"><i class="fa-regular fa-clock"></i></div>
+                    <div class="stat-info">
+                        <h3>Pendientes</h3>
+                        <span id="stat-pending">0</span>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel">
+                    <div class="stat-icon validated"><i class="fa-solid fa-check-double"></i></div>
+                    <div class="stat-info">
+                        <h3>Validados</h3>
+                        <span id="stat-validated">0</span>
+                    </div>
+                </div>
+                <div class="stat-card glass-panel">
+                    <div class="stat-icon rejected"><i class="fa-solid fa-ban"></i></div>
+                    <div class="stat-info">
+                        <h3>Rechazados</h3>
+                        <span id="stat-rejected">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orders Table -->
+            <div class="content-panel glass-panel">
+                <div class="panel-header">
+                    <h2>Listado de Pedidos</h2>
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" data-filter="all">Todos</button>
+                        <button class="filter-tab" data-filter="Validado">Validados</button>
+                        <button class="filter-tab" data-filter="Pendiente">Pendientes</button>
+                        <button class="filter-tab" data-filter="Rechazado">Rechazados</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="orders-table">
+                        <thead>
+                            <tr>
+                                <th>Nro</th>
+                                <th>Fecha</th>
+                                <th>Llave</th>
+                                <th>Monto</th>
+                                <th>Estado</th>
+                                <th>Foto</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-table-body">
+                            <!-- Rows inserted by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="loading-indicator" class="table-loading">
+                    <div class="spinner"></div> Cargando datos...
+                </div>
+            </div>
+        </main>
+    </section>
+
+    <!-- Modals -->
+
+    <!-- New Order Modal -->
+    <div id="modal-new-order" class="modal-backdrop">
+        <div class="modal-card glass-panel">
+            <div class="modal-header">
+                <h3>Nuevo Pedido</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="new-order-form">
+                <div class="form-group">
+                    <label>Fecha <span class="required">*</span></label>
+                    <input type="date" id="new-date" required>
+                </div>
+                <div class="form-group">
+                    <label>Nro Pedido <span class="required">*</span></label>
+                    <input type="number" id="new-nro" required min="1" placeholder="Ej: 1050">
+                    <small>Asegúrate de seguir el correlativo de tu sistema externo.</small>
+                </div>
+                <div class="form-group">
+                    <label>Llave Única <span class="required">*</span></label>
+                    <input type="text" id="new-key" required placeholder="Ej: KEY-2024-X">
+                </div>
+                <div class="form-group">
+                    <label>Monto (S/) <span class="required">*</span></label>
+                    <input type="number" id="new-amount" step="0.01" required placeholder="0.00">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary close-modal">Cancelar</button>
+                    <button type="submit" class="btn-primary">Guardar Pedido</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit / Validate Modal -->
+    <div id="modal-validate" class="modal-backdrop">
+        <div class="modal-card glass-panel wide-modal">
+            <div class="modal-header">
+                <h3>Validar Pedido #<span id="val-nro-display"></span></h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body-grid">
+                <!-- Left: Details -->
+                <div class="details-column">
+                    <div class="detail-group">
+                        <label>Llave</label>
+                        <div class="detail-value" id="val-key-display"></div>
+                    </div>
+                    <div class="detail-group">
+                        <label>Monto Registrado</label>
+                        <div class="detail-value amount-highlight">S/ <span id="val-amount-display"></span></div>
+                    </div>
+
+                    <hr class="divider">
+
+                    <div class="validation-status-box" id="validation-status-box">
+                        <i class="fa-solid fa-circle-question" id="status-icon"></i>
+                        <span id="status-text">Pendiente de Foto</span>
+                    </div>
+
+                    <form id="validate-form">
+                        <input type="hidden" id="val-id"> <!-- Row index -->
+
+                        <div class="form-group">
+                            <label>Tipo de Validación</label>
+                            <div class="validation-type-selector">
+                                <label class="radio-label">
+                                    <input type="radio" name="valType" value="foto" checked>
+                                    <span><i class="fa-regular fa-image"></i> Foto</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="valType" value="efectivo">
+                                    <span><i class="fa-solid fa-money-bill-wave"></i> Efectivo</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="valType" value="online">
+                                    <span><i class="fa-solid fa-globe"></i> Online</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label id="lbl-monto-val">Monto en Foto</label>
+                            <div class="input-with-ocr">
+                                <input type="number" id="val-photo-amount" step="0.01" placeholder="0.00">
+                                <button type="button" id="ocr-trigger-btn" class="btn-icon-small"
+                                    title="Re-escanear foto">
+                                    <i class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                            <small id="ocr-helper-text">Sube una foto para detectar.</small>
+                        </div>
+
+                        <div class="modal-actions">
+                            <button type="submit" class="btn-primary full-width" id="btn-save-validation">Confirmar
+                                Validación</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Right: Photo Upload -->
+                <div class="photo-column">
+                    <label>Evidencia (Foto)</label>
+                    <div class="photo-upload-area" id="photo-drop-zone">
+                        <input type="file" id="photo-input" accept="image/*" class="file-input-hidden">
+                        <div class="upload-placeholder" id="upload-placeholder">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <p>Click o arrastra imagen aquí</p>
+                        </div>
+                        <img id="photo-preview" class="photo-preview hidden" alt="Vista previa">
+                        <div class="ocr-scanning-overlay hidden" id="ocr-overlay">
+                            <div class="scanner-line"></div>
+                            <span>Escaneando monto...</span>
+                        </div>
+                    </div>
+                    <div id="photo-actions" class="photo-actions hidden">
+                        <button type="button" class="btn-secondary small" id="remove-photo-btn">Cambiar Foto</button>
+                        <a href="#" target="_blank" id="view-full-photo" class="btn-secondary small">Ver Original</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
