@@ -714,24 +714,30 @@ let allParsedOrders = [];
 
 document.getElementById('import-btn').addEventListener('click', () => {
     document.getElementById('modal-import').classList.add('active');
-    // Reset
-    document.getElementById('import-file').value = '';
-    document.getElementById('import-preview-container').classList.add('hidden');
-    document.getElementById('import-drop-zone').querySelector('.upload-placeholder').classList.remove('hidden');
-    document.getElementById('btn-confirm-import').disabled = true;
-    allParsedOrders = [];
 
+    const dateInput = document.getElementById('import-date-filter');
+    dateInput.value = ''; // Reset to show all first? Or allow user to type.
     // Set Default Filter Date to Today
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
-    document.getElementById('import-date-filter').value = `${yyyy}-${mm}-${dd}`;
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+
+    document.getElementById('import-file').value = '';
+    document.getElementById('import-preview-container').classList.add('hidden');
+    document.getElementById('import-drop-zone').querySelector('.upload-placeholder').classList.remove('hidden');
+    document.getElementById('btn-confirm-import').disabled = true;
+    allParsedOrders = [];
 });
 
 document.getElementById('import-date-filter').addEventListener('change', () => {
-    renderImportTable(allParsedOrders);
+    // If user changes date, re-render
+    if (allParsedOrders.length > 0) renderImportTable(allParsedOrders);
 });
+
+// Make sure input is clickable
+document.getElementById('import-date-filter').addEventListener('click', (e) => e.stopPropagation());
 
 document.getElementById('import-drop-zone').addEventListener('click', () => document.getElementById('import-file').click());
 document.getElementById('import-file').addEventListener('change', handleImportFileSelect);
@@ -770,8 +776,8 @@ async function parsePDF(file) {
         items.sort((a, b) => {
             const yA = a.transform[5];
             const yB = b.transform[5];
-            // Tolerance for same line
-            if (Math.abs(yA - yB) > 8) {
+            // Height tolerance (e.g. 10px) - Increased to catch subtitles/misalignments
+            if (Math.abs(yA - yB) > 10) {
                 return yB - yA; // Top to Bottom
             }
             return a.transform[4] - b.transform[4]; // Left to Right
@@ -779,7 +785,7 @@ async function parsePDF(file) {
 
         // Reconstruct Lines
         let currentY = -1;
-        let diffTolerance = 8;
+        let diffTolerance = 12; // Relaxed tolerance
         let lineBuffer = [];
 
         const lines = [];
@@ -792,8 +798,7 @@ async function parsePDF(file) {
             } else if (Math.abs(y - currentY) <= diffTolerance) {
                 lineBuffer.push(item.str);
             } else {
-                // New Line
-                lines.push(lineBuffer.join(' '));
+                lines.push(lineBuffer.join(' ')); // Join with space
                 lineBuffer = [item.str];
                 currentY = y;
             }
@@ -802,23 +807,32 @@ async function parsePDF(file) {
 
         // Parse Regex
         lines.forEach(line => {
+            console.log("PDF Line:", line); // Debug helper
+
             // Regex Heuristics
-            // Key: Alphanumeric, usually 6-12 chars.
-            const keyMatch = line.match(/\b[A-Z0-9]{6,12}\b/);
-            // Date Regex: day month year (17 feb. 2026)
-            // Allow "17 feb 2026", "17 feb. 2026", "17 Feb 2026"
-            const dateMatch = line.match(/\d{1,2}\s+[a-zA-Z]{3}\.?\s+\d{4}/);
-            // Amount Regex: S/ 44.29
-            const amountMatch = line.match(/S\/\s?(\d+\.\d{2})/);
+
+            // Key: "HGQGF" (5), "MKFQ" (4), "A8B9C"
+            // Look for Uppercase Alphanumeric blocks of 4+ chars.
+            // Avoid "TOTAL", "FECHA", "HORA".
+            // Some keys have space: "HGQGF MKFQ"
+            const keyMatch = line.match(/\b[A-Z0-9]{4,10}(\s[A-Z0-9]{4,10})?\b/);
+
+            // Date: "17 feb 2026", "17 Feb. 2026", "17/02/2026"
+            const dateMatch = line.match(/(\d{1,2}\s+[a-zA-Z]{3}\.?\s+\d{4})|(\d{1,2}\/\d{1,2}\/\d{4})/);
+
+            // Amount: "S/ 44.29", "S/. 44.29", "44.29" (if close to S/)
+            const amountMatch = line.match(/S\/.?\s?(\d+\.\d{2})/i);
 
             if (amountMatch && keyMatch && dateMatch) {
-                // Filter noise
                 const possibleKey = keyMatch[0];
-                if (possibleKey.includes('TOTAL') || possibleKey.includes('FECHA')) return;
+                if (possibleKey.includes('TOTAL') || possibleKey.includes('FECHA') || possibleKey.includes('PAGINA')) return;
+
+                // Extract Date String
+                const dateStr = dateMatch[0];
 
                 ordersFound.push({
                     llave: possibleKey,
-                    fecha: dateMatch[0],
+                    fecha: dateStr,
                     monto: amountMatch[1],
                     raw: line
                 });
