@@ -896,7 +896,7 @@ function parseCSV(csvText) {
         });
     });
 
-    return ordersFound;
+    return ordersFound.reverse();
 }
 
 // Helper function for parseCSV to convert Spanish date strings to ISO format
