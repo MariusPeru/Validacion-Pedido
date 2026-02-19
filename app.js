@@ -87,8 +87,10 @@ function showApp() {
     // Role based UI
     if (currentUser.rol !== 'Admin') {
         newOrderBtn.style.display = 'none';
+        document.getElementById('import-btn').style.display = 'none';
     } else {
         newOrderBtn.style.display = 'flex';
+        document.getElementById('import-btn').style.display = 'flex';
     }
 
     loadOrders();
