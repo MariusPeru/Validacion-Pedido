@@ -722,6 +722,9 @@ document.getElementById('import-btn').addEventListener('click', () => {
     allParsedOrders = [];
 });
 
+// Make sure input is clickable without double trigger
+document.getElementById('import-file').addEventListener('click', (e) => e.stopPropagation());
+
 document.getElementById('import-drop-zone').addEventListener('click', () => document.getElementById('import-file').click());
 document.getElementById('import-file').addEventListener('change', handleImportFileSelect);
 
@@ -743,6 +746,8 @@ async function handleImportFileSelect(e) {
         Swal.fire('Error', 'No se pudo leer el archivo: ' + err.message, 'error');
         document.getElementById('import-preview-container').classList.add('hidden');
     }
+    // Clear value to allow re-upload same file
+    e.target.value = '';
 }
 
 function parseCSV(csvText) {
@@ -750,12 +755,12 @@ function parseCSV(csvText) {
     const ordersFound = [];
 
     // Expected Format: "Fecha Registro,Llave,Monto"
-    // "18 feb. 2026,KMDCARLS6,37.89"
+    // "17/02/2026,F2FQSKVDG,S/46.90"
 
     lines.forEach((line, index) => {
         if (!line.trim()) return;
 
-        // Simple CSV Split (assuming no commas in fields)
+        // Simple CSV Split
         const parts = line.split(',');
 
         if (parts.length < 3) return;
@@ -763,18 +768,19 @@ function parseCSV(csvText) {
         // Skip Header
         if (parts[0].toLowerCase().includes('fecha') && parts[1].toLowerCase().includes('llave')) return;
 
-        const rawDate = parts[0].trim(); // "18 feb. 2026"
+        const rawDate = parts[0].trim(); // "17/02/2026"
         const key = parts[1].trim().toUpperCase();
-        const amountStr = parts[2].trim();
+        let amountStr = parts[2].trim(); // "S/46.90"
+
+        // Clean Amount (remove S/, space)
+        amountStr = amountStr.replace(/S\//gi, '').replace(/\s/g, '');
 
         // Validate Amount
         const amount = parseFloat(amountStr);
         if (isNaN(amount)) return;
 
-        // Parse Date for consistency (Frontend Display)
-        // Backend handles "18 feb. 2026" via manual map, OR we send YYYY-MM-DD
+        // Parse Date
         const isoDate = parseSpanishDate(rawDate);
-        // Use ISO Date if valid, otherwise raw
         const finalDate = isoDate || rawDate;
 
         ordersFound.push({
