@@ -715,29 +715,12 @@ let allParsedOrders = [];
 document.getElementById('import-btn').addEventListener('click', () => {
     document.getElementById('modal-import').classList.add('active');
 
-    const dateInput = document.getElementById('import-date-filter');
-    dateInput.value = ''; // Reset to show all first? Or allow user to type.
-    // Set Default Filter Date to Today
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    dateInput.value = `${yyyy}-${mm}-${dd}`;
-
     document.getElementById('import-file').value = '';
     document.getElementById('import-preview-container').classList.add('hidden');
     document.getElementById('import-drop-zone').querySelector('.upload-placeholder').classList.remove('hidden');
     document.getElementById('btn-confirm-import').disabled = true;
     allParsedOrders = [];
 });
-
-document.getElementById('import-date-filter').addEventListener('change', () => {
-    // If user changes date, re-render
-    if (allParsedOrders.length > 0) renderImportTable(allParsedOrders);
-});
-
-// Make sure input is clickable
-document.getElementById('import-date-filter').addEventListener('click', (e) => e.stopPropagation());
 
 document.getElementById('import-drop-zone').addEventListener('click', () => document.getElementById('import-file').click());
 document.getElementById('import-file').addEventListener('change', handleImportFileSelect);
@@ -776,7 +759,7 @@ async function parsePDF(file) {
         items.sort((a, b) => {
             const yA = a.transform[5];
             const yB = b.transform[5];
-            // Height tolerance (e.g. 10px) - Increased to catch subtitles/misalignments
+            // Height tolerance (e.g. 10px)
             if (Math.abs(yA - yB) > 10) {
                 return yB - yA; // Top to Bottom
             }
@@ -807,32 +790,24 @@ async function parsePDF(file) {
 
         // Parse Regex
         lines.forEach(line => {
-            console.log("PDF Line:", line); // Debug helper
-
             // Regex Heuristics
 
-            // Key: "HGQGF" (5), "MKFQ" (4), "A8B9C"
-            // Look for Uppercase Alphanumeric blocks of 4+ chars.
-            // Avoid "TOTAL", "FECHA", "HORA".
-            // Some keys have space: "HGQGF MKFQ"
-            const keyMatch = line.match(/\b[A-Z0-9]{4,10}(\s[A-Z0-9]{4,10})?\b/);
+            // Key: "HGQGF" (5), "MKFQ" (4)... Allow 4-12 chars.
+            const keyMatch = line.match(/\b[A-Z0-9]{4,12}(\s[A-Z0-9]{4,12})?\b/);
 
             // Date: "17 feb 2026", "17 Feb. 2026", "17/02/2026"
             const dateMatch = line.match(/(\d{1,2}\s+[a-zA-Z]{3}\.?\s+\d{4})|(\d{1,2}\/\d{1,2}\/\d{4})/);
 
-            // Amount: "S/ 44.29", "S/. 44.29", "44.29" (if close to S/)
+            // Amount
             const amountMatch = line.match(/S\/.?\s?(\d+\.\d{2})/i);
 
             if (amountMatch && keyMatch && dateMatch) {
                 const possibleKey = keyMatch[0];
                 if (possibleKey.includes('TOTAL') || possibleKey.includes('FECHA') || possibleKey.includes('PAGINA')) return;
 
-                // Extract Date String
-                const dateStr = dateMatch[0];
-
                 ordersFound.push({
                     llave: possibleKey,
-                    fecha: dateStr,
+                    fecha: dateMatch[0],
                     monto: amountMatch[1],
                     raw: line
                 });
@@ -842,68 +817,22 @@ async function parsePDF(file) {
     return ordersFound;
 }
 
-function parseSpanishDate(dateStr) {
-    if (!dateStr) return '';
-    try {
-        const parts = dateStr.toLowerCase().replace('.', '').split(/\s+/);
-        if (parts.length < 3) return '';
-
-        const monthMap = {
-            'ene': '01', 'feb': '02', 'mar': '03', 'abr': '04', 'may': '05', 'jun': '06',
-            'jul': '07', 'ago': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dic': '12'
-        };
-        // Normalize month key (take first 3 chars)
-        const mKey = parts[1].substring(0, 3);
-
-        const day = parts[0].padStart(2, '0');
-        const month = monthMap[mKey];
-        const year = parts[2];
-
-        if (day && month && year) {
-            return `${year}-${month}-${day}`; // ISO format for input comparison
-        }
-    } catch (e) { console.error(e); }
-    return '';
-}
-
-function renderImportTable(rawOrders) {
+function renderImportTable(importedOrders) {
     const tbody = document.getElementById('import-table-body');
     tbody.innerHTML = '';
 
-    // Filter by Selected Date
-    const filterDate = document.getElementById('import-date-filter').value;
-
-    let filteredOrders = rawOrders;
-
-    if (filterDate) {
-        filteredOrders = rawOrders.filter(o => {
-            const parsedDate = parseSpanishDate(o.fecha);
-            return parsedDate === filterDate;
-        });
-    }
-
     // Feedback Logic
-    if (rawOrders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No se encontraron pedidos legibles en el PDF. Intenta con otro archivo.</td></tr>';
+    if (importedOrders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No se encontraron pedidos legibles en el PDF.</td></tr>';
         document.getElementById('btn-confirm-import').disabled = true;
         document.getElementById('import-count').textContent = '0';
         return;
     }
 
-    if (filteredOrders.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: #f59e0b;">
-            Se encontraron ${rawOrders.length} pedidos, pero ninguno coincide con la fecha ${filterDate}.<br>
-            <small>Fechas detectadas: ${Array.from(new Set(rawOrders.map(o => o.fecha))).slice(0, 3).join(', ')}...</small>
-        </td></tr>`;
-        document.getElementById('btn-confirm-import').disabled = true;
-        document.getElementById('import-count').textContent = '0'; // Showing 0 qualified
-        return;
-    }
-
-    document.getElementById('import-count').textContent = filteredOrders.length;
+    document.getElementById('import-count').textContent = importedOrders.length;
     document.getElementById('btn-confirm-import').disabled = false;
 
-    filteredOrders.forEach((order, index) => {
+    importedOrders.forEach((order, index) => {
         // Check duplicate local
         const isDupe = orders.some(o => o.llave === order.llave);
         const status = isDupe ? '<span class="badge Rechazado">Duplicado</span>' : '<span class="badge Pendiente">Nuevo</span>';
