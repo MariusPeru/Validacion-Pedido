@@ -999,3 +999,60 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
         Swal.fire('Error', 'Falló la conexión o el procesamiento', 'error');
     }
 });
+
+// Validated Card Breakdown Interaction
+document.getElementById('card-validated')?.addEventListener('click', () => {
+    let cash = 0, cashCount = 0;
+    let online = 0, onlineCount = 0;
+    let voucher = 0, voucherCount = 0;
+
+    orders.forEach(o => {
+        if(o.estado === 'Validado') {
+             const m = parseFloat(o.monto) || 0;
+             if(o.foto === 'PAGO-EFECTIVO') {
+                 cash += m;
+                 cashCount++;
+             } else if(o.foto === 'PAGO-ONLINE') {
+                 online += m;
+                 onlineCount++;
+             } else {
+                 // Assume Voucher/Photo (URL or otherwise)
+                 voucher += m;
+                 voucherCount++;
+             }
+        }
+    });
+
+    Swal.fire({
+        title: 'Detalle de Validados',
+        html: \
+            <div style='text-align: left; padding: 10px; font-size: 1.1rem;'>
+                <div style='margin-bottom: 15px; text-align: center; color: var(--success); font-weight: bold;'>
+                    Total: S/ \
+                </div>
+                
+                <div style='display: flex; justify-content: space-between; margin-bottom: 10px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 8px;'>
+                     <span><i class='fa-solid fa-camera'></i> Voucher</span>
+                     <span>S/ \ <small>(\)</small></span>
+                </div>
+                <div style='display: flex; justify-content: space-between; margin-bottom: 10px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 8px;'>
+                     <span><i class='fa-solid fa-money-bill-wave'></i> Efectivo</span>
+                     <span>S/ \ <small>(\)</small></span>
+                </div>
+                <div style='display: flex; justify-content: space-between; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 8px;'>
+                     <span><i class='fa-solid fa-cloud'></i> Online</span>
+                     <span>S/ \ <small>(\)</small></span>
+                </div>
+            </div>
+        \,
+        background: '#1e1b4b', // Handle dark mode if needed, assuming dark theme from screenshot
+        color: '#fff',
+        showCloseButton: true,
+        focusConfirm: false,
+        confirmButtonText: 'Cerrar',
+        customClass: {
+            popup: 'glass-panel' // Reuse existing glass class if possible
+        }
+    });
+});
+
