@@ -694,13 +694,13 @@ function formatDate(dateStr) {
     return d.toLocaleDateString('es-PE');
 }
 
-function updateStats() {
+function updateStats(data = orders) {
     let totalCount = 0, totalAmount = 0;
     let validCount = 0, validAmount = 0;
     let pendingCount = 0, pendingAmount = 0;
     let rejectedCount = 0, rejectedAmount = 0;
 
-    orders.forEach(o => {
+    data.forEach(o => {
         if (o.estado === 'Reservado') return;
 
         const monto = parseFloat(o.monto) || 0;
@@ -766,6 +766,7 @@ function applyFilters() {
         return statusMatch && searchMatch && dateMatch;
     });
     renderOrders(filtered);
+    updateStats(filtered);
 }
 
 searchInput.addEventListener('input', applyFilters);
@@ -1007,23 +1008,23 @@ document.getElementById('card-validated')?.addEventListener('click', () => {
     let cash = 0, cashCount = 0;
     let online = 0, onlineCount = 0;
     let voucher = 0, voucherCount = 0;
-    
+
     // Safety check just in case orders is not loaded
     if (!orders) return;
 
     orders.forEach(o => {
-        if(o.estado === 'Validado') {
-             const m = parseFloat(o.monto) || 0;
-             if(o.foto === 'PAGO-EFECTIVO') {
-                 cash += m;
-                 cashCount++;
-             } else if(o.foto === 'PAGO-ONLINE') {
-                 online += m;
-                 onlineCount++;
-             } else {
-                 voucher += m;
-                 voucherCount++;
-             }
+        if (o.estado === 'Validado') {
+            const m = parseFloat(o.monto) || 0;
+            if (o.foto === 'PAGO-EFECTIVO') {
+                cash += m;
+                cashCount++;
+            } else if (o.foto === 'PAGO-ONLINE') {
+                online += m;
+                onlineCount++;
+            } else {
+                voucher += m;
+                voucherCount++;
+            }
         }
     });
 
@@ -1032,7 +1033,7 @@ document.getElementById('card-validated')?.addEventListener('click', () => {
         html: `
             <div style="text-align: left; padding: 10px; font-size: 1.1rem;">
                 <div style="margin-bottom: 15px; text-align: center; color: var(--success); font-weight: bold;">
-                    Total: S/ ${formatMoney(cash+online+voucher)}
+                    Total: S/ ${formatMoney(cash + online + voucher)}
                 </div>
                 
                 <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 8px;">

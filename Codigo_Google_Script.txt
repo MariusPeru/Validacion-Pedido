@@ -133,7 +133,7 @@ function crearPedido(data) {
   let fecha;
   if(data.fecha) {
     const parts = data.fecha.split('-');
-    fecha = new Date(parts[0], parts[1]-1, parts[2]); 
+    fecha = new Date(parts[0], parts[1]-1, parts[2], 12, 0, 0); 
   } else {
     fecha = new Date();
   }
@@ -302,7 +302,7 @@ function crearPedidosMasivos(payload) {
              // parts[0] = day, parts[1] = monthname, parts[2] = year
              // Check if parts[1] is in map
              if(monthMap[parts[1]] !== undefined) {
-                 orderDate = new Date(parseInt(parts[2]), monthMap[parts[1]], parseInt(parts[0]));
+                 orderDate = new Date(parseInt(parts[2]), monthMap[parts[1]], parseInt(parts[0]), 12, 0, 0);
              } else {
                  orderDate = new Date(order.fecha); 
              }
@@ -311,7 +311,7 @@ function crearPedidosMasivos(payload) {
              if(String(order.fecha).match(/^\d{4}-\d{2}-\d{2}$/)) {
                  const fParts = String(order.fecha).split('-');
                  // Local Date Constructor: new Date(Year, Month-1, Day)
-                 orderDate = new Date(parseInt(fParts[0]), parseInt(fParts[1])-1, parseInt(fParts[2]));
+                 orderDate = new Date(parseInt(fParts[0]), parseInt(fParts[1])-1, parseInt(fParts[2]), 12, 0, 0);
              } else {
                  orderDate = new Date(order.fecha);
              }
