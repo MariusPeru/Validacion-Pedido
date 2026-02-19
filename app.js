@@ -731,90 +731,92 @@ async function handleImportFileSelect(e) {
 
     // Show Loading
     document.getElementById('import-preview-container').classList.remove('hidden');
-    document.getElementById('import-table-body').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Analizando PDF... Esto puede tomar unos segundos.</td></tr>';
+    document.getElementById('import-table-body').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Leyendo archivo CSV...</td></tr>';
 
     try {
-        const extractedOrders = await parsePDF(file);
+        const text = await file.text();
+        const extractedOrders = parseCSV(text);
         allParsedOrders = extractedOrders;
         renderImportTable(extractedOrders);
     } catch (err) {
         console.error(err);
-        Swal.fire('Error', 'No se pudo leer el PDF: ' + err.message, 'error');
+        Swal.fire('Error', 'No se pudo leer el archivo: ' + err.message, 'error');
         document.getElementById('import-preview-container').classList.add('hidden');
     }
 }
 
-async function parsePDF(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+function parseCSV(csvText) {
+    const lines = csvText.split(/\r?\n/);
     const ordersFound = [];
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
+    // Expected Format: "Fecha Registro,Llave,Monto"
+    // "18 feb. 2026,KMDCARLS6,37.89"
 
-        // Better Row Detection: Sort by Y desc, then X asc
-        const items = textContent.items.filter(item => item.str.trim() !== '');
+    lines.forEach((line, index) => {
+        if (!line.trim()) return;
 
-        items.sort((a, b) => {
-            const yA = a.transform[5];
-            const yB = b.transform[5];
-            // Height tolerance (e.g. 10px)
-            if (Math.abs(yA - yB) > 10) {
-                return yB - yA; // Top to Bottom
-            }
-            return a.transform[4] - b.transform[4]; // Left to Right
+        // Simple CSV Split (assuming no commas in fields)
+        const parts = line.split(',');
+
+        if (parts.length < 3) return;
+
+        // Skip Header
+        if (parts[0].toLowerCase().includes('fecha') && parts[1].toLowerCase().includes('llave')) return;
+
+        const rawDate = parts[0].trim(); // "18 feb. 2026"
+        const key = parts[1].trim().toUpperCase();
+        const amountStr = parts[2].trim();
+
+        // Validate Amount
+        const amount = parseFloat(amountStr);
+        if (isNaN(amount)) return;
+
+        // Parse Date for consistency (Frontend Display)
+        // Backend handles "18 feb. 2026" via manual map, OR we send YYYY-MM-DD
+        const isoDate = parseSpanishDate(rawDate);
+        // Use ISO Date if valid, otherwise raw
+        const finalDate = isoDate || rawDate;
+
+        ordersFound.push({
+            llave: key,
+            fecha: finalDate,
+            monto: amount,
+            raw: line
         });
+    });
 
-        // Reconstruct Lines
-        let currentY = -1;
-        let diffTolerance = 12; // Relaxed tolerance
-        let lineBuffer = [];
-
-        const lines = [];
-
-        items.forEach(item => {
-            const y = item.transform[5];
-            if (currentY === -1) {
-                currentY = y;
-                lineBuffer.push(item.str);
-            } else if (Math.abs(y - currentY) <= diffTolerance) {
-                lineBuffer.push(item.str);
-            } else {
-                lines.push(lineBuffer.join(' ')); // Join with space
-                lineBuffer = [item.str];
-                currentY = y;
-            }
-        });
-        if (lineBuffer.length > 0) lines.push(lineBuffer.join(' '));
-
-        // Parse Regex
-        lines.forEach(line => {
-            // Regex Heuristics
-
-            // Key: "HGQGF" (5), "MKFQ" (4)... Allow 4-12 chars.
-            const keyMatch = line.match(/\b[A-Z0-9]{4,12}(\s[A-Z0-9]{4,12})?\b/);
-
-            // Date: "17 feb 2026", "17 Feb. 2026", "17/02/2026"
-            const dateMatch = line.match(/(\d{1,2}\s+[a-zA-Z]{3}\.?\s+\d{4})|(\d{1,2}\/\d{1,2}\/\d{4})/);
-
-            // Amount
-            const amountMatch = line.match(/S\/.?\s?(\d+\.\d{2})/i);
-
-            if (amountMatch && keyMatch && dateMatch) {
-                const possibleKey = keyMatch[0];
-                if (possibleKey.includes('TOTAL') || possibleKey.includes('FECHA') || possibleKey.includes('PAGINA')) return;
-
-                ordersFound.push({
-                    llave: possibleKey,
-                    fecha: dateMatch[0],
-                    monto: amountMatch[1],
-                    raw: line
-                });
-            }
-        });
-    }
     return ordersFound;
+}
+
+// Helper function for parseCSV to convert Spanish date strings to ISO format
+function parseSpanishDate(dateString) {
+    const months = {
+        'ene': '01', 'feb': '02', 'mar': '03', 'abr': '04', 'may': '05', 'jun': '06',
+        'jul': '07', 'ago': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dic': '12'
+    };
+
+    // Format "18 feb. 2026" or "18 feb 2026"
+    const match = dateString.match(/(\d{1,2})\s+([a-zA-Z]{3})\.?\s+(\d{4})/i);
+    if (match) {
+        const day = match[1].padStart(2, '0');
+        const monthAbbr = match[2].toLowerCase();
+        const year = match[3];
+        const month = months[monthAbbr];
+        if (month) {
+            return `${year}-${month}-${day}`;
+        }
+    }
+
+    // Format "17/02/2026"
+    const slashMatch = dateString.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slashMatch) {
+        const day = slashMatch[1].padStart(2, '0');
+        const month = slashMatch[2].padStart(2, '0');
+        const year = slashMatch[3];
+        return `${year}-${month}-${day}`;
+    }
+
+    return null; // Return null if format is not recognized
 }
 
 function renderImportTable(importedOrders) {
