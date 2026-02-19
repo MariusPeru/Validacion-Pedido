@@ -700,6 +700,10 @@ function updateStats() {
     let pendingCount = 0, pendingAmount = 0;
     let rejectedCount = 0, rejectedAmount = 0;
 
+    // Validated Breakdown
+    let cashCount = 0, cashAmount = 0;
+    let onlineCount = 0, onlineAmount = 0;
+
     orders.forEach(o => {
         if (o.estado === 'Reservado') return;
 
@@ -713,6 +717,17 @@ function updateStats() {
         if (o.estado === 'Validado') {
             validCount++;
             validAmount += monto;
+
+            // Breakdown: Cash vs Online
+            // "PAGO-EFECTIVO" implies Cash. Anything else (URL, PAGO-ONLINE) is Online/Digital.
+            if (o.foto && o.foto.includes('PAGO-EFECTIVO')) {
+                cashCount++;
+                cashAmount += monto;
+            } else {
+                onlineCount++;
+                onlineAmount += monto;
+            }
+
         } else if (o.estado === 'Pendiente') {
             pendingCount++;
             pendingAmount += monto;
@@ -731,6 +746,23 @@ function updateStats() {
 
     document.getElementById('stat-validated-amount').textContent = `S/ ${formatMoney(validAmount)}`;
     document.getElementById('stat-validated-count').textContent = `${validCount} pedidos`;
+
+    // Breakdown UI
+    const breakdownEl = document.getElementById('stat-validated-breakdown');
+    if (breakdownEl) {
+        breakdownEl.innerHTML = `
+            <div style="margin-top: 8px; font-size: 0.75rem; color: #ccc;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span><i class="fa-solid fa-money-bill-wave"></i> Efec:</span>
+                    <span>S/ ${formatMoney(cashAmount)} (${cashCount})</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 2px;">
+                    <span><i class="fa-solid fa-cloud"></i> Onl:</span>
+                    <span>S/ ${formatMoney(onlineAmount)} (${onlineCount})</span>
+                </div>
+            </div>
+        `;
+    }
 
     document.getElementById('stat-rejected-amount').textContent = `S/ ${formatMoney(rejectedAmount)}`;
     document.getElementById('stat-rejected-count').textContent = `${rejectedCount} pedidos`;
