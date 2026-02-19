@@ -21,6 +21,7 @@ let currentUser = null;
 let orders = [];
 let API_URL = localStorage.getItem('api_url') || '';
 let currentFilter = 'all';
+let currentFilteredOrders = [];
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -105,6 +106,7 @@ async function loadOrders() {
         const response = await fetchAPI('listarPedidos');
         if (response.success) {
             orders = response.data;
+            currentFilteredOrders = orders;
             renderOrders(orders);
             updateStats();
         }
@@ -765,6 +767,7 @@ function applyFilters() {
 
         return statusMatch && searchMatch && dateMatch;
     });
+    currentFilteredOrders = filtered;
     renderOrders(filtered);
     updateStats(filtered);
 }
@@ -1010,9 +1013,9 @@ document.getElementById('card-validated')?.addEventListener('click', () => {
     let voucher = 0, voucherCount = 0;
 
     // Safety check just in case orders is not loaded
-    if (!orders) return;
+    if (!currentFilteredOrders) return;
 
-    orders.forEach(o => {
+    currentFilteredOrders.forEach(o => {
         if (o.estado === 'Validado') {
             const m = parseFloat(o.monto) || 0;
             if (o.foto === 'PAGO-EFECTIVO') {
