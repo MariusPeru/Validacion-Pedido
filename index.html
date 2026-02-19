@@ -95,6 +95,12 @@
                     <input type="date" id="date-filter" class="search-input"
                         style="width: auto; padding: 8px 12px; color-scheme: dark; background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
 
+                    <button id="btn-date-range" class="btn-secondary" style="padding: 8px 12px; font-size: 0.9em;">
+                        <i class="fa-solid fa-calendar-week"></i> Corte
+                    </button>
+                    <span id="range-display-text"
+                        style="font-size: 0.85em; color: rgba(255,255,255,0.7); margin-left:8px;"></span>
+
                     <div class="search-wrapper" style="position: relative; flex: 1; max-width: 300px;">
                         <i class="fa-solid fa-magnifying-glass"
                             style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.5); pointer-events: none;"></i>
@@ -199,13 +205,21 @@
             </div>
             <form id="new-order-form">
                 <div class="form-group">
-                    <label>Fecha <span class="required">*</span></label>
-                    <input type="date" id="new-date" required>
+                    <label style="color: white !important;">Correlativo del Filtro Activo <span
+                            id="active-filter-details"
+                            style="font-weight: normal; font-size: 0.9em; margin-left: 5px; opacity: 0.8;"></span></label>
+                    <input type="text" id="new-correlative-display" readonly
+                        style="background: rgba(255, 255, 255, 0.1); border-color: rgba(255,255,255,0.3); font-weight: bold; color: white !important;">
                 </div>
                 <div class="form-group">
-                    <label>Nro Pedido <span class="required">*</span></label>
-                    <input type="number" id="new-nro" required min="1" placeholder="Ej: 1050">
-                    <small>Asegúrate de seguir el correlativo de tu sistema externo.</small>
+                    <label>Fecha <span class="required">*</span></label>
+                    <input type="date" id="new-date" required readonly style="opacity: 0.7; cursor: not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label style="color: white !important;">Correlativo Historial <span
+                            class="required">*</span></label>
+                    <input type="number" id="new-nro" required min="1" readonly
+                        style="opacity: 0.7; cursor: not-allowed;">
                 </div>
                 <div class="form-group">
                     <label>Llave Única <span class="required">*</span></label>
@@ -271,6 +285,33 @@
             </div>
         </div>
     </div>
+
+    <div id="modal-date-range" class="modal-backdrop">
+        <div class="modal-card glass-panel">
+            <div class="modal-header">
+                <h3>Seleccionar Periodo</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="range-form">
+                <div class="form-group">
+                    <label>Desde</label>
+                    <input type="date" id="range-start" required>
+                </div>
+                <div class="form-group">
+                    <label>Hasta</label>
+                    <input type="date" id="range-end" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary close-modal">Cancelar</button>
+                    <button type="submit" class="btn-primary">Aplicar Filtro</button>
+                </div>
+                <div style="margin-top:10px; text-align:center;">
+                    <button type="button" id="btn-clear-range" class="btn-text">Limpiar Rango</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 
     <!-- PDF.js Libs (Add before scripts) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -360,8 +401,10 @@
                         </div>
                     </div>
                     <div id="photo-actions" class="photo-actions hidden">
-                        <button type="button" class="btn-secondary small" id="remove-photo-btn">Cambiar Foto</button>
-                        <a href="#" target="_blank" id="view-full-photo" class="btn-secondary small">Ver Original</a>
+                        <button type="button" class="btn-secondary small" id="remove-photo-btn">Cambiar
+                            Foto</button>
+                        <a href="#" target="_blank" id="view-full-photo" class="btn-secondary small">Ver
+                            Original</a>
                     </div>
                 </div>
             </div>

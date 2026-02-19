@@ -22,6 +22,7 @@ let orders = [];
 let API_URL = localStorage.getItem('api_url') || '';
 let currentFilter = 'all';
 let currentFilteredOrders = [];
+let dateRange = { start: null, end: null };
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -106,9 +107,7 @@ async function loadOrders() {
         const response = await fetchAPI('listarPedidos');
         if (response.success) {
             orders = response.data;
-            currentFilteredOrders = orders;
-            renderOrders(orders);
-            updateStats();
+            applyFilters();
         }
     } catch (error) {
         Swal.fire('Error', 'Error cargando pedidos', 'error');
@@ -118,10 +117,15 @@ async function loadOrders() {
 
 function renderOrders(data) {
     ordersTableBody.innerHTML = '';
-    data.forEach(order => {
+    const totalOrders = data.length; // Total de registros filtrados
+
+    data.forEach((order, index) => {
+        // Correlativo Dinámico Descendente: Total, Total-1, ..., 1
+        const dynamicCorrelative = totalOrders - index;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>#${order.nro}</td>
+            <td>#${dynamicCorrelative}</td>
             <td>${formatDate(order.fecha)}</td>
             <td>${order.llave}</td>
             <td>S/ ${formatMoney(order.monto)}</td>
@@ -151,11 +155,34 @@ function renderOrders(data) {
 // --- Modals & Forms ---
 
 newOrderBtn.addEventListener('click', () => {
-    // Auto-increment Number
+    // 1. Correlativo Historial (Máximo ID + 1)
     const maxNro = orders.reduce((max, o) => Math.max(max, parseInt(o.nro) || 0), 0);
     document.getElementById('new-nro').value = maxNro + 1;
 
-    // Default Date: Today
+    // 2. Correlativo Visual (Filtro Activo + 1)
+    const currentCount = currentFilteredOrders ? currentFilteredOrders.length : 0;
+    document.getElementById('new-correlative-display').value = `# ${currentCount + 1}`;
+
+    // --- DETALLE DEL FILTRO ACTIVO ---
+    let dateText = '';
+    // Helper simple para fecha (reutilizando fmt si es visible o redefiniendo)
+    const fmtLocal = (s) => s.split('-').reverse().join('/');
+
+    if (dateRange.start && dateRange.end) {
+        dateText = `${fmtLocal(dateRange.start)} - ${fmtLocal(dateRange.end)}`;
+    } else {
+        const singleDate = document.getElementById('date-filter').value;
+        dateText = singleDate ? fmtLocal(singleDate) : 'Todas las fechas';
+    }
+
+    // Obtener texto del botón de estado activo
+    const activeTabObj = document.querySelector('.filter-tab.active');
+    const statusText = activeTabObj ? activeTabObj.textContent.trim() : 'Todos';
+
+    document.getElementById('active-filter-details').textContent = `(${dateText} | ${statusText})`;
+    // ---------------------------------
+
+    // 3. Fecha Hoy (Bloqueada)
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -744,6 +771,9 @@ function applyFilters() {
     const term = searchInput.value.toLowerCase();
     const filterDate = document.getElementById('date-filter').value;
 
+    // Validar si existe rango activo
+    const hasRange = dateRange.start && dateRange.end;
+
     const filtered = orders.filter(o => {
         let statusMatch = currentFilter === 'all' || o.estado === currentFilter;
         if (currentFilter === 'Rechazado') {
@@ -755,14 +785,25 @@ function applyFilters() {
             o.estado.toLowerCase().includes(term);
 
         let dateMatch = true;
-        if (filterDate && o.fecha) {
-            // Robust date comparison handling timezone
+
+        if (o.fecha) {
             const d = new Date(o.fecha);
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const oDateStr = `${year}-${month}-${day}`;
-            dateMatch = oDateStr === filterDate;
+            // Normalizar a medianoche para comparar solo fecha
+            d.setHours(0, 0, 0, 0);
+
+            if (hasRange) {
+                // Lógica de rango
+                const start = new Date(dateRange.start + 'T00:00:00'); // Asegurar local time
+                const end = new Date(dateRange.end + 'T00:00:00');
+                dateMatch = d >= start && d <= end;
+            } else if (filterDate) {
+                // Lógica de fecha única
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const oDateStr = `${year}-${month}-${day}`;
+                dateMatch = oDateStr === filterDate;
+            }
         }
 
         return statusMatch && searchMatch && dateMatch;
@@ -773,7 +814,69 @@ function applyFilters() {
 }
 
 searchInput.addEventListener('input', applyFilters);
-document.getElementById('date-filter').addEventListener('change', applyFilters);
+// Limpiar rango si se usa el selector individual
+document.getElementById('date-filter').addEventListener('change', () => {
+    dateRange = { start: null, end: null };
+    document.getElementById('range-display-text').textContent = '';
+    applyFilters();
+});
+
+// Range Modal Logic
+const modalRange = document.getElementById('modal-date-range');
+const btnDateRange = document.getElementById('btn-date-range');
+
+btnDateRange.addEventListener('click', () => {
+    modalRange.classList.add('active');
+});
+
+// Forzar apertura de calendario al hacer click en el input
+['range-start', 'range-end'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('click', () => {
+        if ('showPicker' in HTMLInputElement.prototype) {
+            el.showPicker();
+        }
+    });
+});
+
+document.getElementById('range-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const start = document.getElementById('range-start').value;
+    const end = document.getElementById('range-end').value;
+
+    if (start && end) {
+        dateRange = { start, end };
+        // Limpiar visualmente el date-picker simple para indicar que manda el rango
+        document.getElementById('date-filter').value = '';
+
+        // Función auxiliar local para formatear YYYY-MM-DD -> DD/MM/YYYY sin UTC
+        const fmt = (s) => {
+            if (!s) return '';
+            const [y, m, d] = s.split('-');
+            return `${d}/${m}/${y}`;
+        };
+
+        document.getElementById('range-display-text').textContent = `${fmt(start)} - ${fmt(end)}`;
+        modalRange.classList.remove('active');
+        applyFilters();
+    }
+});
+
+document.getElementById('btn-clear-range').addEventListener('click', () => {
+    dateRange = { start: null, end: null };
+    document.getElementById('range-form').reset();
+
+    // Restaurar fecha hoy por defecto
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    document.getElementById('date-filter').value = `${yyyy}-${mm}-${dd}`;
+    document.getElementById('range-display-text').textContent = '';
+
+    modalRange.classList.remove('active');
+    applyFilters();
+});
 
 document.querySelectorAll('.filter-tab').forEach(tab => {
     tab.addEventListener('click', () => {
