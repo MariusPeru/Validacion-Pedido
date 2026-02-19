@@ -304,10 +304,17 @@ function crearPedidosMasivos(payload) {
              if(monthMap[parts[1]] !== undefined) {
                  orderDate = new Date(parseInt(parts[2]), monthMap[parts[1]], parseInt(parts[0]));
              } else {
-                 orderDate = new Date(order.fecha); // Try standard parse
+                 orderDate = new Date(order.fecha); 
              }
          } else if (order.fecha) {
-             orderDate = new Date(order.fecha);
+             // FIX: Handle YYYY-MM-DD to prevent Timezone shift (UTC to Local)
+             if(String(order.fecha).match(/^\d{4}-\d{2}-\d{2}$/)) {
+                 const fParts = String(order.fecha).split('-');
+                 // Local Date Constructor: new Date(Year, Month-1, Day)
+                 orderDate = new Date(parseInt(fParts[0]), parseInt(fParts[1])-1, parseInt(fParts[2]));
+             } else {
+                 orderDate = new Date(order.fecha);
+             }
          }
       } catch(e) {
          orderDate = new Date();

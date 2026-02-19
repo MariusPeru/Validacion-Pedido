@@ -394,10 +394,13 @@ async function runOCR(file) {
     valPhotoAmountInput.placeholder = 'Escaneando...';
 
     try {
-        // Pre-process
+        const worker = await Tesseract.createWorker();
+        await worker.loadLanguage('eng');
+        await worker.initialize('eng');
+
+        // Pre-process (Scale Up 2x for better OCR)
         const processedImage = await preprocessImage(file);
 
-        const worker = await Tesseract.createWorker('eng');
         const ret = await worker.recognize(processedImage);
         console.log("OCR Text:", ret.data.text);
 
@@ -406,22 +409,29 @@ async function runOCR(file) {
         if (extractedAmount > 0) {
             valPhotoAmountInput.value = extractedAmount.toFixed(2);
             itemDetected(extractedAmount);
-            Swal.fire({
-                title: 'Detectado',
-                text: `S/ ${extractedAmount.toFixed(2)}`,
-                icon: 'success',
+            // ... (rest of UI logic)
+            const Toast = Swal.mixin({
                 toast: true,
                 position: 'top-end',
+                showConfirmButton: false,
                 timer: 3000,
-                showConfirmButton: false
+                timerProgressBar: true,
+            });
+            Toast.fire({
+                icon: 'success',
+                title: `Detectado: S/ ${extractedAmount.toFixed(2)}`
             });
         } else {
-            Swal.fire({
-                title: 'Info',
-                text: 'No se detectó el monto automáticamente. Ingréselo manual.',
-                icon: 'info',
+            // ... (rest of UI logic)
+            const Toast = Swal.mixin({
                 toast: true,
-                position: 'top-end'
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000
+            });
+            Toast.fire({
+                icon: 'info',
+                title: 'No se detectó el monto. Ingrese manual.'
             });
             valPhotoAmountInput.placeholder = '0.00';
             valPhotoAmountInput.focus();
@@ -430,7 +440,7 @@ async function runOCR(file) {
         await worker.terminate();
     } catch (err) {
         console.error(err);
-        Swal.fire('Error OCR', 'No se pudo leer la imagen.', 'warning');
+        Swal.fire('Error OCR', 'No se pudo leer la imagen.', 'error');
     }
 
     ocrOverlay.classList.add('hidden');
@@ -444,59 +454,103 @@ function preprocessImage(file) {
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
+            // Scale up 2x for small text
+            const scale = 2;
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
 
-            // Grayscale & High Contrast
+            // Grayscale only (Let Tesseract handle binarization)
             for (let i = 0; i < data.length; i += 4) {
                 const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                const contrast = avg > 140 ? 255 : 0; // Simple binarization threshold
-                data[i] = contrast;
-                data[i + 1] = contrast;
-                data[i + 2] = contrast;
+                data[i] = avg;     // R
+                data[i + 1] = avg; // G
+                data[i + 2] = avg; // B
             }
+
             ctx.putImageData(imageData, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg'));
+            resolve(canvas.toDataURL('image/jpeg', 0.9));
         };
     });
 }
 
 function extractAmountFromText(text) {
-    // Clean common OCR mistakes
-    let cleanText = text.replace(/S\//gi, '')
-        .replace(/[^\d.,\n]/g, ' ');
+    console.log("Raw OCR:", text);
 
+    // 1. Look for 'Total' keyword
+    const lines = text.split('\n');
+    let totalAmount = 0;
+
+    // Regex for Amount: "S/ 143.86", "143.86", "S/. 143.86"
+    // Handles dots and commas
+    const amountRegex = /S\/?\.?\s?(\d+[.,]\d{2})|(\d+[.,]\d{2})/i;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].toLowerCase();
+        if (line.includes('total')) {
+            // Look in this line
+            let match = line.match(/(\d+[.,]\d{2})/); // Simple Match number
+            if (match) {
+                totalAmount = parseFloat(match[0].replace(',', '.'));
+                break;
+            }
+            // Or next line
+            if (i + 1 < lines.length) {
+                match = lines[i + 1].match(/(\d+[.,]\d{2})/);
+                if (match) {
+                    totalAmount = parseFloat(match[0].replace(',', '.'));
+                    break;
+                }
+            }
+        }
+    }
+
+    if (totalAmount > 0) return totalAmount;
+
+    // 2. Fallback: Find largest number that looks like money
+    const cleanText = text.replace(/S\//gi, '').replace(/[^\d.,\n]/g, ' ');
     const tokens = cleanText.split(/\s+/);
     const candidates = [];
 
     tokens.forEach(token => {
-        if (token.includes('.') || token.includes(',')) {
-            let numStr = token.replace(/,/g, '.');
-            // Fix multiple dots: 1.200.50 -> 1200.50
-            const parts = numStr.split('.');
-            if (parts.length > 2) {
-                numStr = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
-            }
+        if (token.length < 3) return; // Skip small noise
+        // Normalize 1,200.50 -> 1200.50
+        // Or 143,86 -> 143.86
+        let numStr = token;
 
-            const num = parseFloat(numStr);
-            if (!isNaN(num) && num > 0 && num < 100000) {
-                // Ignore likely dates (e.g. 20.24) or tiny numbers
-                if (numStr.includes('.')) {
-                    candidates.push(num);
-                }
-            }
+        // Count dots and commas
+        const dots = (token.match(/\./g) || []).length;
+        const commas = (token.match(/,/g) || []).length;
+
+        if (dots === 0 && commas === 1) {
+            // 143,86 -> 143.86
+            numStr = token.replace(',', '.');
+        } else if (dots === 1 && commas === 0) {
+            // 143.86 -> 143.86
+        } else if (dots > 0 || commas > 0) {
+            // Mixed... try to keep last separator as decimal
+            numStr = token.replace(/[,.]/g, (m, offset) => {
+                return offset === token.lastIndexOf(',') || offset === token.lastIndexOf('.') ? '.' : '';
+            });
+        }
+
+        const val = parseFloat(numStr);
+        if (!isNaN(val) && val > 0 && val < 10000) {
+            // Look for decimal part presence
+            if (numStr.includes('.')) candidates.push(val);
         }
     });
 
     if (candidates.length > 0) {
-        // Return largest plausible number (Total amount is usually the largest figure)
+        // Return largest
         candidates.sort((a, b) => b - a);
         return candidates[0];
     }
+
     return 0;
 }
 
