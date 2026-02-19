@@ -7,6 +7,7 @@ Aplicación web segura y moderna para la validación y gestión de pedidos, cone
 *   **Gestión de Pedidos**: Visualización en tiempo real de pedidos (Pendientes, Validados, Rechazados).
 *   **Validación Inteligente**:
     *   **OCR (Reconocimiento Óptico)**: Extrae automáticamente el monto de las fotos de los vouchers.
+    *   **Carga Masiva (PDF)**: Importa múltiples pedidos desde archivos PDF, con detección automática de duplicados y filtrado por fecha.
     *   **Validación Manual**: Opción para pagos en Efectivo y Online.
 *   **Roles de Usuario**:
     *   **Admin**: Control total (Crear, Editar, Validar, Rechazar).

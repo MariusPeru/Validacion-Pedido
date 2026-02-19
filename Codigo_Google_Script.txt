@@ -30,6 +30,9 @@ function doPost(e) {
       case 'rechazarPedido':
         result = rechazarPedido(payload);
         break;
+      case 'crearPedidosMasivos':
+        result = crearPedidosMasivos(payload);
+        break;
       default:
         result = { success: false, message: "Acción desconocida: " + action + " (Versión antigua)" };
     }
@@ -247,4 +250,79 @@ function rechazarPedido(data) {
   ]]);
   
   return { success: true };
+}
+
+function crearPedidosMasivos(payload) {
+  // 1. Check Permissions
+  if (getUserRole(payload.usuario) !== 'Admin') {
+     return { success: false, message: "Acceso Denegado: Se requiere rol Admin" };
+  }
+
+  const sheet = getSheet().getSheetByName('Pedidos');
+  const data = sheet.getDataRange().getValues();
+  
+  // 2. Analyze existing data (Max Nro and Existing Keys)
+  let maxNro = 0;
+  const existingKeys = new Set();
+  
+  for(let i=1; i<data.length; i++) {
+    const rowNro = parseInt(data[i][0]);
+    if (!isNaN(rowNro) && rowNro > maxNro) maxNro = rowNro;
+    
+    if(data[i][2]) existingKeys.add(String(data[i][2]).trim());
+  }
+  
+  // 3. Process New Orders
+  const newOrders = payload.orders; // Array of { llave, fecha, monto }
+  let addedCount = 0;
+  let skippedCount = 0;
+  
+  // Month Map for parsing text dates like "18 feb. 2026"
+  const monthMap = {
+     'ene': 0, 'feb': 1, 'mar': 2, 'abr': 3, 'may': 4, 'jun': 5,
+     'jul': 6, 'ago': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dic': 11
+  };
+  
+  newOrders.forEach(order => {
+      // Skip if key exists
+      if(existingKeys.has(String(order.llave).trim())) {
+          skippedCount++;
+          return;
+      }
+      
+      maxNro++;
+      
+      // Parse Date (Expects string "DD MMM. YYYY" or ISO)
+      // If regex failed in frontend, it might be current date.
+      let orderDate = new Date();
+      try {
+         if(order.fecha && typeof order.fecha === 'string' && order.fecha.includes(' ')) {
+             // Try manual parse "18 feb. 2026"
+             const parts = order.fecha.toLowerCase().replace('.','').split(' ');
+             // parts[0] = day, parts[1] = monthname, parts[2] = year
+             // Check if parts[1] is in map
+             if(monthMap[parts[1]] !== undefined) {
+                 orderDate = new Date(parseInt(parts[2]), monthMap[parts[1]], parseInt(parts[0]));
+             } else {
+                 orderDate = new Date(order.fecha); // Try standard parse
+             }
+         } else if (order.fecha) {
+             orderDate = new Date(order.fecha);
+         }
+      } catch(e) {
+         orderDate = new Date();
+      }
+      
+      sheet.appendRow([
+        maxNro,
+        orderDate,
+        order.llave,
+        parseFloat(order.monto),
+        "", 0, "Pendiente", "", ""
+      ]);
+      
+      addedCount++;
+  });
+  
+  return { success: true, added: addedCount, skipped: skippedCount, message: `Importado: ${addedCount}, Duplicados: ${skippedCount}` };
 }
