@@ -695,17 +695,45 @@ function formatDate(dateStr) {
 }
 
 function updateStats() {
-    const total = orders.filter(o => o.estado !== 'Reservado').length;
-    const validated = orders.filter(o => o.estado === 'Validado').length;
-    const pending = orders.filter(o => o.estado === 'Pendiente').length;
-    const rejected = orders.filter(o => o.estado === 'Rechazado' || o.estado === 'No Validado').length;
+    let totalCount = 0, totalAmount = 0;
+    let validCount = 0, validAmount = 0;
+    let pendingCount = 0, pendingAmount = 0;
+    let rejectedCount = 0, rejectedAmount = 0;
 
-    document.getElementById('stat-total').textContent = total;
-    document.getElementById('stat-validated').textContent = validated;
-    document.getElementById('stat-pending').textContent = pending;
-    if (document.getElementById('stat-rejected')) {
-        document.getElementById('stat-rejected').textContent = rejected;
-    }
+    orders.forEach(o => {
+        if (o.estado === 'Reservado') return;
+
+        const monto = parseFloat(o.monto) || 0;
+
+        // Total
+        totalCount++;
+        totalAmount += monto;
+
+        // By Status
+        if (o.estado === 'Validado') {
+            validCount++;
+            validAmount += monto;
+        } else if (o.estado === 'Pendiente') {
+            pendingCount++;
+            pendingAmount += monto;
+        } else if (o.estado === 'Rechazado' || o.estado === 'No Validado') {
+            rejectedCount++;
+            rejectedAmount += monto;
+        }
+    });
+
+    // Update UI
+    document.getElementById('stat-total-amount').textContent = `S/ ${formatMoney(totalAmount)}`;
+    document.getElementById('stat-total-count').textContent = `${totalCount} pedidos`;
+
+    document.getElementById('stat-pending-amount').textContent = `S/ ${formatMoney(pendingAmount)}`;
+    document.getElementById('stat-pending-count').textContent = `${pendingCount} pedidos`;
+
+    document.getElementById('stat-validated-amount').textContent = `S/ ${formatMoney(validAmount)}`;
+    document.getElementById('stat-validated-count').textContent = `${validCount} pedidos`;
+
+    document.getElementById('stat-rejected-amount').textContent = `S/ ${formatMoney(rejectedAmount)}`;
+    document.getElementById('stat-rejected-count').textContent = `${rejectedCount} pedidos`;
 }
 
 // Search
