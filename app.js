@@ -454,19 +454,38 @@ function preprocessImage(file) {
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            // Scale up 2x for small text
+
+            // Layout Analysis: "Total" is usually in the bottom half.
+            // Crop top 35% to remove logos/headers interference
+            const sourceY = img.height * 0.35;
+            const sourceHeight = img.height * 0.65;
+
+            // Scale up 2x
             const scale = 2;
             canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
+            canvas.height = sourceHeight * scale;
 
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            // Draw Cropped Image Scaled
+            ctx.drawImage(img, 0, sourceY, img.width, sourceHeight, 0, 0, canvas.width, canvas.height);
 
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
 
-            // Grayscale only (Let Tesseract handle binarization)
+            // Increase Contrast and Grayscale
+            const contrastFactor = 1.5; // Increase contrast amount
+            const intercept = 128 * (1 - contrastFactor);
+
             for (let i = 0; i < data.length; i += 4) {
-                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                // Grayscale
+                let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+
+                // Contrast
+                avg = avg * contrastFactor + intercept;
+
+                // Clamp
+                if (avg > 255) avg = 255;
+                if (avg < 0) avg = 0;
+
                 data[i] = avg;     // R
                 data[i + 1] = avg; // G
                 data[i + 2] = avg; // B
