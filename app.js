@@ -163,7 +163,20 @@ function renderOrders(data) {
 
 newOrderBtn.addEventListener('click', () => {
     // 1. Correlativo Historial (Máximo ID + 1)
-    const maxNro = orders.reduce((max, o) => Math.max(max, parseInt(o.nro) || 0), 0);
+    let maxNro = 0;
+    if (orders && orders.length > 0) {
+        maxNro = orders.reduce((max, o) => {
+            const val = parseInt(o.nro);
+            return (!isNaN(val)) ? Math.max(max, val) : max;
+        }, 0);
+    }
+
+    // Safety fallback: si hay pedidos pero max es 0 (ej. error de parsing), usar la longitud total
+    if (orders.length > 0 && maxNro === 0) {
+        console.warn("MaxNro falló. Usando longitud del array.", orders);
+        maxNro = orders.length;
+    }
+
     document.getElementById('new-nro').value = maxNro + 1;
 
     // 2. Correlativo Visual (Filtro Activo + 1)
