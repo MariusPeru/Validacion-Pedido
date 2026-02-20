@@ -132,10 +132,15 @@ function renderOrders(data) {
             <td>${order.llave}</td>
             <td>S/ ${formatMoney(order.monto)}</td>
             <td><span class="badge ${order.estado.replace(' ', '-')}">${order.estado}</span></td>
-            <td>${order.foto === 'PAGO-EFECTIVO' ?
+            <td style="font-size:0.9em;">${order.envio || '<span class="text-muted">-</span>'}</td>
+            <td>
+                ${order.foto === 'PAGO-EFECTIVO' ?
                 '<span class="badge" style="background:rgba(16, 185, 129, 0.2); color:#4ade80; border:1px solid rgba(74, 222, 128, 0.3); cursor:default"><i class="fa-solid fa-money-bill-wave"></i> Efectivo</span>' :
                 (order.foto === 'PAGO-ONLINE' ? '<span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#60a5fa; border:1px solid rgba(96, 165, 250, 0.3); cursor:default"><i class="fa-solid fa-globe"></i> Online</span>' :
                     (order.foto ? '<a href="' + order.foto + '" target="_blank" class="btn-icon-small"><i class="fa-solid fa-image"></i></a>' : '<span class="text-muted">-</span>'))}
+            </td>
+            <td style="font-size: 0.85em; color: rgba(255,255,255,0.8);">
+                ${order.validado_por || '<span class="text-muted">-</span>'}
             </td>
             <td>
                 ${order.estado === 'Rechazado' ? '<span class="text-muted" title="Pedido Rechazado"><i class="fa-solid fa-lock"></i></span>' : `
@@ -191,6 +196,9 @@ newOrderBtn.addEventListener('click', () => {
     const dd = String(today.getDate()).padStart(2, '0');
     document.getElementById('new-date').value = `${yyyy}-${mm}-${dd}`;
 
+    // Limpiar campo hora para mostrar placeholder
+    document.getElementById('new-time').value = '';
+
     document.getElementById('modal-new-order').classList.add('active');
 });
 
@@ -207,9 +215,15 @@ document.getElementById('new-key').addEventListener('input', function () {
 
 newOrderForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Combine Date + Time
+    const datePart = document.getElementById('new-date').value;
+    const timePart = document.getElementById('new-time').value;
+    const fullDate = `${datePart} ${timePart}`; // YYYY-MM-DD HH:mm
+
     const data = {
         nro: document.getElementById('new-nro').value,
-        fecha: document.getElementById('new-date').value,
+        fecha: fullDate,
         llave: document.getElementById('new-key').value,
         monto: document.getElementById('new-amount').value,
         usuario: currentUser.usuario
@@ -720,9 +734,19 @@ function formatMoney(amount) {
 
 function formatDate(dateStr) {
     if (!dateStr) return '-';
-    // dateStr comes as ISO or local from GAS
+
     const d = new Date(dateStr);
-    return d.toLocaleDateString('es-PE');
+
+    // Fecha: DD/MM/YYYY
+    const datePart = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Hora: HH:mm am/pm
+    const timePart = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    // Si es "00:00" o "12:00:00 a.m." (dependiendo del locale) asumimos que no tiene hora real
+    // Pero como ahora soportamos hora, mostramos lo que haya.
+
+    return `<div>${datePart}</div><div style="font-size:0.75em; color:rgba(255,255,255,0.6);">${timePart}</div>`;
 }
 
 function updateStats(data = orders) {
@@ -981,6 +1005,7 @@ function parseCSV(csvText) {
         const rawDate = parts[0].trim(); // "17/02/2026"
         const key = parts[1].trim().toUpperCase();
         let amountStr = parts[2].trim(); // "S/46.90"
+        let envio = parts[3] ? parts[3].trim().replace(/\r/g, '') : ""; // "Yeiser G."
 
         // Clean Amount (remove S/, space)
         amountStr = amountStr.replace(/S\//gi, '').replace(/\s/g, '');
@@ -997,10 +1022,15 @@ function parseCSV(csvText) {
             llave: key,
             fecha: finalDate,
             monto: amount,
+            envio: envio,
             raw: line
         });
     });
 
+    // Importante: Invertimos el orden aquí para que al enviarse a BD:
+    // 1. El último del archivo (más antiguo) se procese primero -> ID menor
+    // 2. El primero del archivo (más reciente) se procese al final -> ID mayor
+    // Resultado visual final (DESC): ID mayor (Reciente) queda ARRIBA.
     return ordersFound.reverse();
 }
 
@@ -1010,6 +1040,13 @@ function parseSpanishDate(dateString) {
         'ene': '01', 'feb': '02', 'mar': '03', 'abr': '04', 'may': '05', 'jun': '06',
         'jul': '07', 'ago': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dic': '12'
     };
+
+    // Format "19/02/2026 10:08" (Prioridad para tu nuevo formato)
+    const dateTimeMatch = dateString.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+    if (dateTimeMatch) {
+        // Return as is, Google Script will parse it with the new logic
+        return dateString;
+    }
 
     // Format "18 feb. 2026" or "18 feb 2026"
     const match = dateString.match(/(\d{1,2})\s+([a-zA-Z]{3})\.?\s+(\d{4})/i);
@@ -1023,7 +1060,7 @@ function parseSpanishDate(dateString) {
         }
     }
 
-    // Format "17/02/2026"
+    // Format "17/02/2026" (Sin hora)
     const slashMatch = dateString.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if (slashMatch) {
         const day = slashMatch[1].padStart(2, '0');
@@ -1062,6 +1099,7 @@ function renderImportTable(importedOrders) {
             <td>${order.llave}</td>
             <td>${order.fecha}</td>
             <td>S/ ${order.monto}</td>
+            <td>${order.envio || ''}</td>
             <td>${status}</td>
         `;
         tbody.appendChild(tr);

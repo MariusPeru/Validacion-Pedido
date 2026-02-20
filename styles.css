@@ -870,4 +870,12 @@ body {
     color: white;
     border: 1px solid rgba(239, 68, 68, 0.5);
     font-weight: 500;
+}/* ... existing styles ... */
+
+/* Ajuste para la columna de fecha con hora */
+.orders-table td:nth-child(2) {
+    line-height: 1.2;
+    /* Better spacing for 2 lines */
+    min-width: 100px;
+    /* Ensure enough width */
 }

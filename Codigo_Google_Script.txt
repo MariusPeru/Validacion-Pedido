@@ -85,10 +85,15 @@ function listarPedidos() {
   const sheet = getSheet().getSheetByName('Pedidos');
   if (!sheet) return { success: false, message: "Hoja 'Pedidos' no encontrada" };
   
-  const data = sheet.getDataRange().getValues();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, data: [] }; // Si solo hay encabezados o nada
+
+  // FE DE ERRATAS: Usamos getRange explícito para forzar 10 columnas (A..J)
+  // Aunque la columna J esté vacía, esto devolverá cadenas vacías "" en lugar de cortar la fila.
+  const data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
   const pedidos = [];
 
-  for (let i = 1; i < data.length; i++) {
+  for (let i = 0; i < data.length; i++) {
     const row = data[i];
     if (!row[0]) continue; 
 
@@ -101,7 +106,8 @@ function listarPedidos() {
       monto_foto: row[5],
       estado: row[6],
       validado_por: row[7],
-      fecha_validacion: row[8]
+      fecha_validacion: row[8],
+      envio: row[9] || "" // Ahora row[9] existirá siempre (puede ser "" o null)
     });
   }
   
@@ -144,7 +150,7 @@ function crearPedido(data) {
         gap,
         new Date(),
         `RESERVADO-${gap}`,
-        0, "", 0, "Reservado", "", ""
+        0, "", 0, "Reservado", "", "", ""
       ]);
     }
   }
@@ -154,7 +160,7 @@ function crearPedido(data) {
     fecha,
     data.llave,
     parseFloat(data.monto),
-    "", 0, "Pendiente", "", ""
+    "", 0, "Pendiente", "", "", "" // Empty envio for manual
   ]);
   
   return { success: true };
@@ -294,27 +300,36 @@ function crearPedidosMasivos(payload) {
       
       // Parse Date (Expects string "DD MMM. YYYY" or ISO)
       // If regex failed in frontend, it might be current date.
+      // Parse Date (Expects string "DD/MM/YYYY HH:mm", "YYYY-MM-DD HH:mm" or ISO)
       let orderDate = new Date();
       try {
-         if(order.fecha && typeof order.fecha === 'string' && order.fecha.includes(' ')) {
-             // Try manual parse "18 feb. 2026"
-             const parts = order.fecha.toLowerCase().replace('.','').split(' ');
-             // parts[0] = day, parts[1] = monthname, parts[2] = year
-             // Check if parts[1] is in map
+         const dateStr = String(order.fecha).trim();
+         
+         // Caso 1: DD/MM/YYYY HH:mm (Tu formato CSV)
+         // Regex detecta: 19/02/2026 10:08
+         const dmyTime = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
+         if (dmyTime) {
+             orderDate = new Date(dmyTime[3], dmyTime[2]-1, dmyTime[1], dmyTime[4], dmyTime[5], 0);
+         }
+         // Caso 2: DD/MM/YYYY (Sin hora -> mediodía)
+         else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+             const parts = dateStr.split('/');
+             orderDate = new Date(parts[2], parts[1]-1, parts[0], 12, 0, 0);
+         }
+         // Caso 3: YYYY-MM-DD HH:mm
+         else if (dateStr.match(/^\d{4}-\d{2}-\d{2}\s\d{1,2}:\d{2}$/)) {
+             orderDate = new Date(dateStr);
+         }
+         // Caso 4: Texto "18 feb. 2026" (Legacy)
+         else if(dateStr.includes(' ')) {
+             const parts = dateStr.toLowerCase().replace('.','').split(' ');
              if(monthMap[parts[1]] !== undefined) {
                  orderDate = new Date(parseInt(parts[2]), monthMap[parts[1]], parseInt(parts[0]), 12, 0, 0);
              } else {
                  orderDate = new Date(order.fecha); 
              }
-         } else if (order.fecha) {
-             // FIX: Handle YYYY-MM-DD to prevent Timezone shift (UTC to Local)
-             if(String(order.fecha).match(/^\d{4}-\d{2}-\d{2}$/)) {
-                 const fParts = String(order.fecha).split('-');
-                 // Local Date Constructor: new Date(Year, Month-1, Day)
-                 orderDate = new Date(parseInt(fParts[0]), parseInt(fParts[1])-1, parseInt(fParts[2]), 12, 0, 0);
-             } else {
-                 orderDate = new Date(order.fecha);
-             }
+         } else {
+             orderDate = new Date(order.fecha);
          }
       } catch(e) {
          orderDate = new Date();
@@ -325,7 +340,8 @@ function crearPedidosMasivos(payload) {
         orderDate,
         order.llave,
         parseFloat(order.monto),
-        "", 0, "Pendiente", "", ""
+        "", 0, "Pendiente", "", "",
+        (order.envio && order.envio.trim() !== "") ? order.envio.toString() : "" // Columna J: Responsable
       ]);
       
       addedCount++;
