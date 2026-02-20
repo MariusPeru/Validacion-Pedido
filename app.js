@@ -143,14 +143,14 @@ function renderOrders(data) {
                 ${order.validado_por || '<span class="text-muted">-</span>'}
             </td>
             <td>
-                ${order.estado === 'Rechazado' ? '<span class="text-muted" title="Pedido Rechazado"><i class="fa-solid fa-lock"></i></span>' : `
+                ${(order.estado === 'Cancelado' || order.estado === 'Rechazado') ? '<span class="text-muted" title="Pedido Cancelado"><i class="fa-solid fa-lock"></i></span>' : `
                 <button class="btn-secondary small" onclick="openValidateModal(${order.nro})" title="${currentUser.rol === 'Admin' ? 'Validar/Ver' : 'Solo Lectura'}">
                     ${currentUser.rol === 'Admin' ?
                     `<i class="fa-solid ${order.estado === 'Validado' ? 'fa-eye' : 'fa-pen-to-square'}"></i>` :
                     `<i class="fa-solid fa-eye"></i> <i class="fa-solid fa-lock" style="font-size:0.7em"></i>`}
                 </button>
                 ${currentUser.rol === 'Admin' && order.estado !== 'Validado' ? `
-                <button class="btn-icon-small danger" onclick="rejectOrder(${order.nro})" title="Rechazar">
+                <button class="btn-icon-small danger" onclick="rejectOrder(${order.nro})" title="Cancelar">
                     <i class="fa-solid fa-ban"></i>
                 </button>` : ''}`}
             </td>
@@ -216,15 +216,16 @@ document.getElementById('new-key').addEventListener('input', function () {
 newOrderForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // Combine Date + Time
+    // Separate Date + Time
     const datePart = document.getElementById('new-date').value;
     const timePart = document.getElementById('new-time').value;
-    const fullDate = `${datePart} ${timePart}`; // YYYY-MM-DD HH:mm
 
     const data = {
         nro: document.getElementById('new-nro').value,
-        fecha: fullDate,
+        fecha: datePart, // Send YYYY-MM-DD cleanly
+        hora: timePart,  // Send HH:mm separately
         llave: document.getElementById('new-key').value,
+        envio: document.getElementById('new-envio').value,
         monto: document.getElementById('new-amount').value,
         usuario: currentUser.usuario
     };
@@ -735,18 +736,20 @@ function formatMoney(amount) {
 function formatDate(dateStr) {
     if (!dateStr) return '-';
 
-    const d = new Date(dateStr);
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return String(dateStr); // Si falla, devuelve el original
 
-    // Fecha: DD/MM/YYYY
-    const datePart = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        // Fecha: DD/MM/YYYY
+        const datePart = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-    // Hora: HH:mm am/pm
-    const timePart = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+        // Hora: HH:mm am/pm
+        const timePart = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    // Si es "00:00" o "12:00:00 a.m." (dependiendo del locale) asumimos que no tiene hora real
-    // Pero como ahora soportamos hora, mostramos lo que haya.
-
-    return `<div>${datePart}</div><div style="font-size:0.75em; color:rgba(255,255,255,0.6);">${timePart}</div>`;
+        return `<div>${datePart}</div><div style="font-size:0.75em; color:rgba(255,255,255,0.6);">${timePart}</div>`;
+    } catch (e) {
+        return String(dateStr);
+    }
 }
 
 function updateStats(data = orders) {
@@ -771,7 +774,7 @@ function updateStats(data = orders) {
         } else if (o.estado === 'Pendiente') {
             pendingCount++;
             pendingAmount += monto;
-        } else if (o.estado === 'Rechazado' || o.estado === 'No Validado') {
+        } else if (o.estado === 'Cancelado' || o.estado === 'Rechazado') {
             rejectedCount++;
             rejectedAmount += monto;
         }
@@ -802,8 +805,8 @@ function applyFilters() {
 
     const filtered = orders.filter(o => {
         let statusMatch = currentFilter === 'all' || o.estado === currentFilter;
-        if (currentFilter === 'Rechazado') {
-            statusMatch = o.estado === 'Rechazado' || o.estado === 'No Validado';
+        if (currentFilter === 'Cancelado') {
+            statusMatch = o.estado === 'Cancelado' || o.estado === 'Rechazado';
         }
 
         const searchMatch = o.llave.toLowerCase().includes(term) ||
@@ -917,14 +920,14 @@ refreshBtn.addEventListener('click', loadOrders);
 
 window.rejectOrder = async (nro) => {
     const result = await Swal.fire({
-        title: '¿Rechazar Pedido?',
+        title: '¿Cancelar Pedido?',
         text: "Esta acción no se puede deshacer.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Sí, rechazar',
-        cancelButtonText: 'Cancelar'
+        confirmButtonText: 'Sí, cancelar',
+        cancelButtonText: 'No'
     });
 
     if (result.isConfirmed) {
@@ -932,7 +935,7 @@ window.rejectOrder = async (nro) => {
         try {
             const res = await fetchAPI('rechazarPedido', { nro, usuario: currentUser.usuario });
             if (res.success) {
-                Swal.fire('Rechazado', 'El pedido ha sido marcado como rechazado.', 'success');
+                Swal.fire('Cancelado', 'El pedido ha sido marcado como cancelado.', 'success');
                 loadOrders();
             } else {
                 Swal.fire('Error', res.message, 'error');

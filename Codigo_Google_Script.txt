@@ -94,21 +94,34 @@ function listarPedidos() {
   const pedidos = [];
 
   for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    if (!row[0]) continue; 
+    try {
+      const row = data[i];
+      if (!row[0]) continue; // Saltar si no hay ID (fila vacía)
 
-    pedidos.push({
-      nro: row[0],
-      fecha: row[1],
-      llave: row[2],
-      monto: row[3],
-      foto: row[4],
-      monto_foto: row[5],
-      estado: row[6],
-      validado_por: row[7],
-      fecha_validacion: row[8],
-      envio: row[9] || "" // Ahora row[9] existirá siempre (puede ser "" o null)
-    });
+      // Protección extra: Convertir fecha a string seguro si es objeto
+      let fechaSegura = row[1];
+      if (fechaSegura instanceof Date) {
+        // Dejarlo como objeto Date, Google lo serializa bien
+      } else if (!fechaSegura) {
+         fechaSegura = new Date(); // Fallback si fecha vacía
+      }
+
+      pedidos.push({
+        nro: row[0],
+        fecha: fechaSegura,
+        llave: row[2] || "",
+        monto: row[3] || 0,
+        foto: row[4] || "",
+        monto_foto: row[5] || 0,
+        estado: row[6] || "Pendiente",
+        validado_por: row[7] || "",
+        fecha_validacion: row[8] || "",
+        envio: row[9] || ""
+      });
+    } catch (e) {
+      // Si una fila falla, la ignoramos y seguimos (evita pantalla blanca)
+      Logger.log("Error en fila " + (i+2) + ": " + e.toString());
+    }
   }
   
   pedidos.sort((a, b) => b.nro - a.nro);
@@ -138,12 +151,26 @@ function crearPedido(data) {
   // Date Logic
   let fecha;
   if(data.fecha) {
-    const parts = data.fecha.split('-');
-    fecha = new Date(parts[0], parts[1]-1, parts[2], 12, 0, 0); 
+    const parts = data.fecha.split('-'); // YYYY-MM-DD
+    let hours = 12;
+    let minutes = 0;
+    
+    // Si viene hora (formato HH:mm), la usamos
+    if (data.hora) {
+       const timeParts = data.hora.split(':');
+       if (timeParts.length === 2) {
+           hours = parseInt(timeParts[0]);
+           minutes = parseInt(timeParts[1]);
+       }
+    }
+    
+    // Mes en JS es 0-11
+    fecha = new Date(parts[0], parts[1]-1, parts[2], hours, minutes, 0); 
   } else {
     fecha = new Date();
   }
   
+  // Rellenar huecos si es necesario
   if (maxNro > 0 && newNro > maxNro + 1) {
     for (let gap = maxNro + 1; gap < newNro; gap++) {
       sheet.appendRow([
@@ -160,7 +187,8 @@ function crearPedido(data) {
     fecha,
     data.llave,
     parseFloat(data.monto),
-    "", 0, "Pendiente", "", "", "" // Empty envio for manual
+    "", 0, "Pendiente", "", "", 
+    data.envio || "" // Columna 10: Responsable Envío
   ]);
   
   return { success: true };
@@ -250,7 +278,7 @@ function rechazarPedido(data) {
   
   // Col 7: Estado (index 6), Col 8: Validado Por, Col 9: Fecha
   sheet.getRange(rowIndex, 7, 1, 3).setValues([[
-    "Rechazado",
+    "Cancelado",
     data.usuario,
     new Date()
   ]]);
