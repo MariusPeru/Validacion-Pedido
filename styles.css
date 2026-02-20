@@ -457,7 +457,8 @@ body {
 }
 
 .badge.Rechazado,
-.badge.No-Validado {
+.badge.No-Validado,
+.badge.Cancelado {
     background: rgba(239, 68, 68, 0.2);
     color: var(--danger);
     border: 1px solid rgba(239, 68, 68, 0.3);
@@ -870,7 +871,9 @@ body {
     color: white;
     border: 1px solid rgba(239, 68, 68, 0.5);
     font-weight: 500;
-}/* ... existing styles ... */
+}
+
+/* ... existing styles ... */
 
 /* Ajuste para la columna de fecha con hora */
 .orders-table td:nth-child(2) {
