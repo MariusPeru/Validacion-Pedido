@@ -17,9 +17,6 @@
     <!-- Styles -->
     <link rel="stylesheet" href="styles.css">
 
-    <!-- OCR Library -->
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
-
     <!-- Alerts -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
@@ -112,9 +109,13 @@
                     <i class="fa-solid fa-rotate-right"></i>
                 </button>
                 <div style="display: flex; gap: 10px;">
-                    <button id="import-btn" class="btn-secondary" title="Carga Masiva (PDF)"
+                    <button id="import-btn" class="btn-secondary" title="Carga Masiva (PDF/CSV)"
                         style="padding: 10px 15px;">
-                        <i class="fa-solid fa-file-pdf"></i>
+                        <i class="fa-solid fa-file-csv"></i>
+                    </button>
+                    <button id="import-text-btn" class="btn-secondary" title="Pegar Pedidos"
+                        style="padding: 10px 15px; margin-left: 5px;">
+                        <i class="fa-solid fa-paste"></i>
                     </button>
                     <button id="new-order-btn" class="btn-primary">
                         <i class="fa-solid fa-plus"></i> Nuevo Pedido
@@ -293,6 +294,61 @@
                 <button type="button" class="btn-secondary close-modal">Cancelar</button>
                 <button type="button" class="btn-primary" id="btn-confirm-import" disabled>
                     <i class="fa-solid fa-cloud-arrow-up"></i> Importar Seleccionados
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Text Modal -->
+    <div id="modal-import-text" class="modal-backdrop">
+        <div class="modal-card glass-panel wide-modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-paste"></i> Pegar Pedidos desde la Web</h3>
+                <button class="close-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="import-content">
+                <div class="photo-upload-area" id="import-text-drop-zone"
+                    style="height: 150px; min-height: 150px; margin-bottom: 20px; text-align: center; border-style: dashed; display: flex; flex-direction: column; justify-content: center; align-items: center;"
+                    tabindex="0">
+                    <div class="upload-placeholder" id="import-text-placeholder">
+                        <i class="fa-solid fa-clipboard"
+                            style="font-size: 2.5em; margin-bottom: 15px; color: rgba(255,255,255,0.8);"></i>
+                        <p style="font-size: 1.1em; margin-bottom: 5px;">Haz clic aquí y luego presiona
+                            <strong>Ctrl+V</strong></p>
+                        <p style="font-size: 0.85em; opacity: 0.7;">Para pegar las filas copiadas desde la plataforma
+                        </p>
+                    </div>
+                </div>
+
+                <div id="import-text-preview-container" class="hidden">
+                    <div class="panel-header">
+                        <h4>Pedidos Encontrados: <span id="import-text-count">0</span></h4>
+                    </div>
+                    <div class="table-responsive"
+                        style="max-height: 300px; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px;">
+                        <table class="orders-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"><input type="checkbox" id="import-text-check-all" checked>
+                                    </th>
+                                    <th>Llave</th>
+                                    <th>Fecha Hora</th>
+                                    <th>Monto</th>
+                                    <th>Envío</th>
+                                    <th>Estado Original</th>
+                                </tr>
+                            </thead>
+                            <tbody id="import-text-table-body">
+                                <!-- JS inserts here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary close-modal">Cancelar</button>
+                <button type="button" class="btn-primary" id="btn-confirm-import-text" disabled>
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Importar Datos
                 </button>
             </div>
         </div>

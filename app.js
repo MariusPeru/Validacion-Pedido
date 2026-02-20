@@ -88,9 +88,11 @@ function showApp() {
     if (currentUser.rol !== 'Admin') {
         newOrderBtn.style.display = 'none';
         document.getElementById('import-btn').style.display = 'none';
+        document.getElementById('import-text-btn').style.display = 'none';
     } else {
         newOrderBtn.style.display = 'flex';
         document.getElementById('import-btn').style.display = 'flex';
+        document.getElementById('import-text-btn').style.display = 'flex';
     }
 
     loadOrders();
@@ -1160,6 +1162,249 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
     } catch (e) {
         console.error(e);
         Swal.fire('Error', 'Falló la conexión o el procesamiento', 'error');
+    }
+});
+
+// --- Bulk Import Text (Paste) Logic ---
+
+let allParsedTextOrders = [];
+const importTextModal = document.getElementById('modal-import-text');
+const importTextBtn = document.getElementById('import-text-btn');
+const importTextDropZone = document.getElementById('import-text-drop-zone');
+const importTextPreviewContainer = document.getElementById('import-text-preview-container');
+const importTextTableBody = document.getElementById('import-text-table-body');
+const btnConfirmImportText = document.getElementById('btn-confirm-import-text');
+const importTextPlaceholder = document.getElementById('import-text-placeholder');
+
+importTextBtn.addEventListener('click', () => {
+    importTextModal.classList.add('active');
+    resetImportTextModal();
+});
+
+function resetImportTextModal() {
+    importTextPreviewContainer.classList.add('hidden');
+    importTextPlaceholder.style.display = 'block';
+    btnConfirmImportText.disabled = true;
+    allParsedTextOrders = [];
+
+    // Enfocar el drop zone para que pueda capturar el evento de pegar (Ctrl+V)
+    setTimeout(() => {
+        importTextDropZone.focus();
+    }, 100);
+}
+
+// Interceptar el Ctrl+V en la zona designada
+importTextDropZone.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+
+    if (pastedText) {
+        processPastedText(pastedText);
+    }
+});
+
+function processPastedText(text) {
+    const extractedOrders = parseRawCopiedText(text);
+    allParsedTextOrders = extractedOrders;
+
+    // Ocultar placeholder y mostrar tabla
+    importTextPlaceholder.style.display = 'none';
+    renderImportTextTable(extractedOrders);
+}
+
+function parseRawCopiedText(text) {
+    const ordersFound = [];
+
+    // Separar por líneas y eliminar las que están 100% vacías
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
+
+    // La llave tiene 9 caracteres (alfanuméricos)
+    const keyRegex = /^[A-Z0-9]{9}$/;
+
+    // Expresión para Fecha: "20 feb. 2026"
+    const dateRegex = /(\d{1,2})\s+([a-zA-Z]{3})\.?\s+(\d{4})/;
+    // Expresión para Hora: "11:20 a. m." o "9:47 a. m."
+    const timeRegex = /(\d{1,2}):(\d{2})\s+([ap]\.?\s*m\.?)/i;
+
+    let i = 0;
+    while (i < lines.length) {
+        let line = lines[i];
+
+        // 1. Encontrar el inicio de un bloque: La Llave
+        if (keyRegex.test(line)) {
+            const llave = line;
+
+            // Hemos encontrado el inicio de un pedido.
+            // Según el bloque de ejemplo proporcionado:
+            // Línea actual (i): Llave (Ej: G7N4S4TIC)
+            // Línea i+1: Consumidor (ignoramos)
+            // Línea i+2 (a veces, tras saltos vacíos filtrados): Fecha (Ej: 20 feb. 2026)
+            // Línea i+3: Hora (Ej: 11:20 a. m.)
+            // Línea i+4: Estado (Terminado o Cancelado...)
+            // Línea i+5: Nombre de Envío (Ej: Yeiser G. o Ivan n.)
+            // Línea i+6: Monto (Ej: S/ 56.29)
+            // Línea i+7: Método de pago (ignoramos)
+
+            let fechaStr = '';
+            let horaStr = '';
+            let status = '';
+            let envio = '';
+            let monto = 0;
+
+            // Avanzar cursor para buscar los datos secuencialmente
+            i++;
+
+            // Buscar fecha
+            while (i < lines.length && !dateRegex.test(lines[i])) { i++; }
+            if (i < lines.length && dateRegex.test(lines[i])) {
+                const dMatch = lines[i].match(dateRegex);
+                const dtIso = parseSpanishDate(dMatch[0]);
+                if (dtIso) {
+                    const [y, m, d] = dtIso.split('-');
+                    fechaStr = `${d}/${m}/${y}`;
+                }
+                i++; // Avanzar a hora
+            }
+
+            // Conseguir hora
+            if (i < lines.length && timeRegex.test(lines[i])) {
+                const tMatch = lines[i].match(timeRegex);
+                let hour = parseInt(tMatch[1]);
+                const min = tMatch[2];
+                const ampm = tMatch[3].toLowerCase();
+                if (ampm.includes('p') && hour < 12) hour += 12;
+                if (ampm.includes('a') && hour === 12) hour = 0;
+                horaStr = `${String(hour).padStart(2, '0')}:${min}`;
+                i++; // Avanzar a estado
+            }
+
+            // Estado (ej. Terminado)
+            if (i < lines.length) {
+                status = lines[i];
+                i++;
+            }
+
+            // Nombre del Repartidor (Envío)
+            if (i < lines.length) {
+                envio = lines[i];
+                i++;
+            }
+
+            // Monto (Ej. S/ 56.29)
+            if (i < lines.length && lines[i].startsWith('S/')) {
+                const amountClean = lines[i].replace(/[^\d.,]/g, '').replace(',', '.');
+                monto = parseFloat(amountClean).toFixed(2);
+                i++;
+            }
+
+            // Re-armar Fecha y Hora
+            let finalDate = fechaStr;
+            if (fechaStr && horaStr) finalDate = `${fechaStr} ${horaStr}`;
+
+            ordersFound.push({
+                llave: llave,
+                fecha: finalDate,
+                monto: monto,
+                envio: envio,
+                originalStatus: status // Útil para la vista previa
+            });
+
+        } else {
+            // No es llave, seguimos buscando
+            i++;
+        }
+    }
+
+    // Mantener el mismo orden en que fueron copiados de la web superior a inferior (Más recientes primero)
+    return ordersFound;
+}
+
+function renderImportTextTable(importedOrders) {
+    importTextPreviewContainer.classList.remove('hidden');
+    importTextTableBody.innerHTML = '';
+
+    if (importedOrders.length === 0) {
+        importTextTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No se encontró texto compatible. Asegúrese de copiar las filas directamente desde el origen web.</td></tr>';
+        btnConfirmImportText.disabled = true;
+        document.getElementById('import-text-count').textContent = '0';
+        return;
+    }
+
+    document.getElementById('import-text-count').textContent = importedOrders.length;
+    btnConfirmImportText.disabled = false;
+
+    // Check All handler
+    const checkAllBox = document.getElementById('import-text-check-all');
+    checkAllBox.checked = true;
+    checkAllBox.onchange = (e) => {
+        const cbs = document.querySelectorAll('.import-text-check');
+        cbs.forEach(cb => {
+            if (!cb.disabled) cb.checked = e.target.checked;
+        });
+    };
+
+    importedOrders.forEach((order) => {
+        const isDupe = orders.some(o => o.llave === order.llave);
+        const statusHTML = isDupe ? '<span class="badge Rechazado">Duplicado en Sistema</span>' : `<span class="badge" style="background: rgba(255,255,255,0.1)">${order.originalStatus}</span>`;
+
+        const tr = document.createElement('tr');
+
+        tr.innerHTML = `
+            <td><input type="checkbox" class="import-text-check" data-llave="${order.llave}" ${isDupe ? '' : 'checked'} ${isDupe ? 'disabled' : ''}></td>
+            <td style="font-weight: bold;">${order.llave}</td>
+            <td>${order.fecha}</td>
+            <td style="color:var(--success);">S/ ${order.monto}</td>
+            <td>${order.envio}</td>
+            <td>${statusHTML}</td>
+        `;
+        importTextTableBody.appendChild(tr);
+        // Save order data attached to checkbox for import
+        tr.querySelector('.import-text-check').orderData = order;
+    });
+}
+
+btnConfirmImportText.addEventListener('click', async () => {
+    const checkboxes = document.querySelectorAll('.import-text-check:checked');
+    if (checkboxes.length === 0) {
+        Swal.fire('Error', 'Selecciona al menos un pedido nuevo para importar', 'warning');
+        return;
+    }
+
+    const selectedOrders = [];
+    checkboxes.forEach(cb => {
+        if (cb.orderData) {
+            selectedOrders.push({
+                llave: cb.orderData.llave,
+                fecha: cb.orderData.fecha,
+                monto: cb.orderData.monto,
+                envio: cb.orderData.envio,
+                nro: null // Correlativo generado por BD
+            });
+        }
+    });
+
+    Swal.fire({
+        title: 'Importando...',
+        text: `Enviando ${selectedOrders.length} pedidos a BD`,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const res = await fetchAPI('crearPedidosMasivos', {
+            orders: selectedOrders,
+            usuario: currentUser.usuario
+        });
+
+        if (res.success) {
+            Swal.fire('Éxito', res.message, 'success');
+            importTextModal.classList.remove('active');
+            loadOrders();
+        } else {
+            Swal.fire('Error', res.message, 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        Swal.fire('Error', 'Falló la conexión masiva', 'error');
     }
 });
 
