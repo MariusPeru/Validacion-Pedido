@@ -1,379 +1,133 @@
-// CÓDIGO GOOGLE APPS SCRIPT
-// Copia todo el contenido de este archivo al editor de script de tu Google Sheet.
+// --- CÓDIGO GOOGLE APPS SCRIPT FINAL ---
+// Copia todo este contenido a tu editor de scripts de Google (Código.gs)
 
 function doGet(e) {
-  return HtmlService.createHtmlOutput("API activa. Usa POST para interactuar.");
+  return HtmlService.createHtmlOutput("API Activa - Versión Final Corregida");
 }
 
 function doPost(e) {
-  const output = ContentService.createTextOutput();
-  output.setMimeType(ContentService.MimeType.JSON);
-  
+  const output = ContentService.createTextOutput().setMimeType(ContentService.MimeType.JSON);
   try {
     const payload = JSON.parse(e.postData.contents);
     const action = payload.action;
     let result = {};
     
     switch(action) {
-      case 'login':
-        result = login(payload.user, payload.pass);
-        break;
-      case 'listarPedidos':
-        result = listarPedidos();
-        break;
-      case 'crearPedido':
-        result = crearPedido(payload);
-        break;
-      case 'validarPedido':
-        result = validarPedido(payload);
-        break;
-      case 'rechazarPedido':
-        result = rechazarPedido(payload);
-        break;
-      case 'crearPedidosMasivos':
-        result = crearPedidosMasivos(payload);
-        break;
-      default:
-        result = { success: false, message: "Acción desconocida: " + action + " (Versión antigua)" };
+      case 'login': result = login(payload.user, payload.pass); break;
+      case 'listarPedidos': result = listarPedidos(); break;
+      case 'crearPedido': result = crearPedido(payload); break;
+      case 'validarPedido': result = validarPedido(payload); break;
+      case 'rechazarPedido': result = rechazarPedido(payload); break;
+      case 'crearPedidosMasivos': result = crearPedidosMasivos(payload); break;
+      default: result = { success: false, message: "Acción desconocida" };
     }
-    
     output.setContent(JSON.stringify(result));
   } catch (err) {
     output.setContent(JSON.stringify({ success: false, message: err.toString() }));
   }
-  
   return output;
 }
 
-function getSheet() {
-  return SpreadsheetApp.getActiveSpreadsheet();
-}
+function getSheet() { return SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos'); }
 
 function login(user, pass) {
-  const sheet = getSheet().getSheetByName('Usuarios');
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Usuarios');
   if (!sheet) return { success: false, message: "Hoja 'Usuarios' no encontrada" };
-  
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) == user && String(data[i][1]) == pass) {
-      return { 
-        success: true, 
-        user: { 
-          usuario: data[i][0], 
-          nombre: data[i][2],
-          rol: data[i][3] || 'Lector'
-        } 
-      };
+      return { success: true, user: { usuario: data[i][0], nombre: data[i][2], rol: data[i][3] || 'Lector' } };
     }
   }
   return { success: false, message: "Credenciales incorrectas" };
 }
 
-function getUserRole(username) {
-  const sheet = getSheet().getSheetByName('Usuarios');
-  if (!sheet) return 'Lector';
-  const data = sheet.getDataRange().getValues();
-  for(let i=1; i<data.length; i++) {
-    if(String(data[i][0]) == username) {
-      return data[i][3] || 'Lector';
-    }
-  }
-  return 'Lector';
-}
-
 function listarPedidos() {
-  const sheet = getSheet().getSheetByName('Pedidos');
+  const sheet = getSheet();
   if (!sheet) return { success: false, message: "Hoja 'Pedidos' no encontrada" };
-  
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: true, data: [] }; // Si solo hay encabezados o nada
-
-  // FE DE ERRATAS: Usamos getRange explícito para forzar 10 columnas (A..J)
-  // Aunque la columna J esté vacía, esto devolverá cadenas vacías "" en lugar de cortar la fila.
+  if (lastRow < 2) return { success: true, data: [] };
   const data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
-  const pedidos = [];
-
-  for (let i = 0; i < data.length; i++) {
-    try {
-      const row = data[i];
-      if (!row[0]) continue; // Saltar si no hay ID (fila vacía)
-
-      // Protección extra: Convertir fecha a string seguro si es objeto
-      let fechaSegura = row[1];
-      if (fechaSegura instanceof Date) {
-        // Dejarlo como objeto Date, Google lo serializa bien
-      } else if (!fechaSegura) {
-         fechaSegura = new Date(); // Fallback si fecha vacía
-      }
-
-      pedidos.push({
-        nro: row[0],
-        fecha: fechaSegura,
-        llave: row[2] || "",
-        monto: row[3] || 0,
-        foto: row[4] || "",
-        monto_foto: row[5] || 0,
-        estado: row[6] || "Pendiente",
-        validado_por: row[7] || "",
-        fecha_validacion: row[8] || "",
-        envio: row[9] || ""
-      });
-    } catch (e) {
-      // Si una fila falla, la ignoramos y seguimos (evita pantalla blanca)
-      Logger.log("Error en fila " + (i+2) + ": " + e.toString());
-    }
-  }
-  
-  pedidos.sort((a, b) => b.nro - a.nro);
-  return { success: true, data: pedidos };
-}
-
-function crearPedido(data) {
-  if (getUserRole(data.usuario) !== 'Admin') return { success: false, message: "Acceso Denegado: Se requiere rol Admin" };
-
-  const sheet = getSheet().getSheetByName('Pedidos');
-  const allData = sheet.getDataRange().getValues();
-  const newNro = parseInt(data.nro);
-  
-  let maxNro = 0;
-  let exists = false;
-  
-  for(let i=1; i<allData.length; i++) {
-    const n = parseInt(allData[i][0]);
-    if (!isNaN(n)) {
-      if(n > maxNro) maxNro = n;
-      if(n == newNro) exists = true;
-    }
-  }
-  
-  if (exists) return { success: false, message: "El pedido ya existe" };
-  
-  // Date Logic
-  let fecha;
-  if(data.fecha) {
-    const parts = data.fecha.split('-'); // YYYY-MM-DD
-    let hours = 12;
-    let minutes = 0;
-    
-    // Si viene hora (formato HH:mm), la usamos
-    if (data.hora) {
-       const timeParts = data.hora.split(':');
-       if (timeParts.length === 2) {
-           hours = parseInt(timeParts[0]);
-           minutes = parseInt(timeParts[1]);
-       }
-    }
-    
-    // Mes en JS es 0-11
-    fecha = new Date(parts[0], parts[1]-1, parts[2], hours, minutes, 0); 
-  } else {
-    fecha = new Date();
-  }
-  
-  // Rellenar huecos si es necesario
-  if (maxNro > 0 && newNro > maxNro + 1) {
-    for (let gap = maxNro + 1; gap < newNro; gap++) {
-      sheet.appendRow([
-        gap,
-        new Date(),
-        `RESERVADO-${gap}`,
-        0, "", 0, "Reservado", "", "", ""
-      ]);
-    }
-  }
-  
-  sheet.appendRow([
-    newNro,
-    fecha,
-    data.llave,
-    parseFloat(data.monto),
-    "", 0, "Pendiente", "", "", 
-    data.envio || "" // Columna 10: Responsable Envío
-  ]);
-  
-  return { success: true };
+  const pedidos = data.map(row => ({
+    nro: row[0], fecha: row[1], llave: row[2], monto: row[3], foto: row[4],
+    monto_foto: row[5], estado: row[6], validado_por: row[7], fecha_validacion: row[8], envio: row[9]
+  })).filter(p => p.nro);
+  return { success: true, data: pedidos.sort((a, b) => b.nro - a.nro) };
 }
 
 function validarPedido(data) {
-  if (getUserRole(data.usuario) !== 'Admin') return { success: false, message: "Acceso Denegado: Se requiere rol Admin" };
-
-  const sheet = getSheet().getSheetByName('Pedidos');
-  const allData = sheet.getDataRange().getValues();
-  const targetNro = parseInt(data.nro);
+  var sheet = getSheet();
+  var rows = sheet.getDataRange().getValues();
+  var rowIndex = -1;
+  for (var i = 1; i < rows.length; i++) { if (rows[i][0] == data.nro) { rowIndex = i + 1; break; } }
+  if (rowIndex === -1) return { success: false, message: "No encontrado" };
   
-  let rowIndex = -1;
-  for(let i=1; i<allData.length; i++) {
-    if(parseInt(allData[i][0]) == targetNro) {
-      rowIndex = i + 1;
-      break;
-    }
-  }
-  
-  if (rowIndex == -1) return { success: false, message: "Pedido no encontrado" };
-  
-  let fotoUrl = "";
-  
-  if (data.tipo === 'EFECTIVO') {
-    fotoUrl = "PAGO-EFECTIVO";
-  } else if (data.tipo === 'ONLINE') {
-    fotoUrl = "PAGO-ONLINE";
-  } else if (data.archivo) {
+  var photoUrl = "";
+  if (data.archivo && data.archivo.data) {
     try {
-      const decoded = Utilities.base64Decode(data.archivo.data);
-      const blob = Utilities.newBlob(decoded, data.archivo.type, `pedido_${targetNro}.jpg`);
-      
-      const folderName = "Fotos_Pedidos_Validacion";
-      const folders = DriveApp.getFoldersByName(folderName);
-      let folder;
-      if (folders.hasNext()) { folder = folders.next(); }
-      else { folder = DriveApp.createFolder(folderName); }
-      
-      const file = folder.createFile(blob);
+      // TU ID DE CARPETA YA CONFIGURADO
+      var folderId = "1YO8veJ9RtTGOBdilEEnVHdPSLwsbGdRo"; 
+      var folder = (folderId && folderId.length > 10) ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
+      var blob = Utilities.newBlob(Utilities.base64Decode(data.archivo.data), data.archivo.type, data.archivo.name);
+      var file = folder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      fotoUrl = "https://lh3.googleusercontent.com/d/" + file.getId(); 
-      
-    } catch (e) {
-      return { success: false, message: "Error subiendo foto: " + e.toString() };
-    }
+      photoUrl = "https://lh3.googleusercontent.com/d/" + file.getId(); // Link Directo
+    } catch(e) { photoUrl = "Error Foto: " + e.toString(); }
   } else {
-    fotoUrl = allData[rowIndex-1][4]; 
+    var current = rows[rowIndex-1][4] || "";
+    photoUrl = current.split(" ")[0]; // Mantener URL base si ya existía
   }
-  
-  const montoRegistrado = parseFloat(allData[rowIndex-1][3]);
-  const montoFoto = parseFloat(data.montoFoto);
-  let estado = "No Validado";
-  
-  if (Math.abs(montoRegistrado - montoFoto) < 0.5) {
-    estado = "Validado";
-  }
-  
-  const range = sheet.getRange(rowIndex, 5, 1, 5);
-  range.setValues([[
-    fotoUrl,
-    montoFoto,
-    estado,
-    data.usuario,
-    new Date()
-  ]]);
-  
-  return { success: true };
-}
 
-function rechazarPedido(data) {
-  if (getUserRole(data.usuario) !== 'Admin') return { success: false, message: "Acceso Denegado: Se requiere rol Admin" };
-
-  const sheet = getSheet().getSheetByName('Pedidos');
-  const allData = sheet.getDataRange().getValues();
-  const targetNro = parseInt(data.nro);
+  // INYECCIÓN DE DATOS: URL + TIPO + VUELTO
+  var injectedValue = photoUrl || "";
+  if (data.tipo) injectedValue += " " + data.tipo;
+  if (data.tipo === "EFECTIVO" && data.vuelto) injectedValue += " VUELTO: " + data.vuelto;
   
-  let rowIndex = -1;
-  for(let i=1; i<allData.length; i++) {
-    if(parseInt(allData[i][0]) == targetNro) {
-      rowIndex = i + 1;
-      break;
-    }
-  }
-  
-  if (rowIndex == -1) return { success: false, message: "Pedido no encontrado" };
-  
-  // Col 7: Estado (index 6), Col 8: Validado Por, Col 9: Fecha
-  sheet.getRange(rowIndex, 7, 1, 3).setValues([[
-    "Cancelado",
-    data.usuario,
-    new Date()
-  ]]);
-  
+  // Guardar en Columnas E, F, G, H, I (Índices 5, 6, 7, 8, 9)
+  sheet.getRange(rowIndex, 5).setValue(injectedValue.trim()); // Foto/Inyectado
+  sheet.getRange(rowIndex, 6).setValue(data.montoFoto); // Monto OCR
+  sheet.getRange(rowIndex, 7).setValue("Validado"); 
+  sheet.getRange(rowIndex, 8).setValue(data.usuario);
+  sheet.getRange(rowIndex, 9).setValue(new Date()); 
   return { success: true };
 }
 
 function crearPedidosMasivos(payload) {
-  // 1. Check Permissions
-  if (getUserRole(payload.usuario) !== 'Admin') {
-     return { success: false, message: "Acceso Denegado: Se requiere rol Admin" };
-  }
-
-  const sheet = getSheet().getSheetByName('Pedidos');
+  const sheet = getSheet();
   const data = sheet.getDataRange().getValues();
-  
-  // 2. Analyze existing data (Max Nro and Existing Keys)
   let maxNro = 0;
   const existingKeys = new Set();
-  
   for(let i=1; i<data.length; i++) {
-    const rowNro = parseInt(data[i][0]);
-    if (!isNaN(rowNro) && rowNro > maxNro) maxNro = rowNro;
-    
-    if(data[i][2]) existingKeys.add(String(data[i][2]).trim());
+    const currentNro = parseInt(data[i][0]);
+    if (currentNro > maxNro) maxNro = currentNro;
+    if (data[i][2]) existingKeys.add(String(data[i][2]).trim());
   }
   
-  // 3. Process New Orders
-  const newOrders = payload.orders; // Array of { llave, fecha, monto }
-  let addedCount = 0;
-  let skippedCount = 0;
-  
-  // Month Map for parsing text dates like "18 feb. 2026"
-  const monthMap = {
-     'ene': 0, 'feb': 1, 'mar': 2, 'abr': 3, 'may': 4, 'jun': 5,
-     'jul': 6, 'ago': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dic': 11
-  };
-  
-  newOrders.forEach(order => {
-      // Skip if key exists
-      if(existingKeys.has(String(order.llave).trim())) {
-          skippedCount++;
-          return;
-      }
-      
-      maxNro++;
-      
-      // Parse Date (Expects string "DD MMM. YYYY" or ISO)
-      // If regex failed in frontend, it might be current date.
-      // Parse Date (Expects string "DD/MM/YYYY HH:mm", "YYYY-MM-DD HH:mm" or ISO)
-      let orderDate = new Date();
-      try {
-         const dateStr = String(order.fecha).trim();
-         
-         // Caso 1: DD/MM/YYYY HH:mm (Tu formato CSV)
-         // Regex detecta: 19/02/2026 10:08
-         const dmyTime = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
-         if (dmyTime) {
-             orderDate = new Date(dmyTime[3], dmyTime[2]-1, dmyTime[1], dmyTime[4], dmyTime[5], 0);
-         }
-         // Caso 2: DD/MM/YYYY (Sin hora -> mediodía)
-         else if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
-             const parts = dateStr.split('/');
-             orderDate = new Date(parts[2], parts[1]-1, parts[0], 12, 0, 0);
-         }
-         // Caso 3: YYYY-MM-DD HH:mm
-         else if (dateStr.match(/^\d{4}-\d{2}-\d{2}\s\d{1,2}:\d{2}$/)) {
-             orderDate = new Date(dateStr);
-         }
-         // Caso 4: Texto "18 feb. 2026" (Legacy)
-         else if(dateStr.includes(' ')) {
-             const parts = dateStr.toLowerCase().replace('.','').split(' ');
-             if(monthMap[parts[1]] !== undefined) {
-                 orderDate = new Date(parseInt(parts[2]), monthMap[parts[1]], parseInt(parts[0]), 12, 0, 0);
-             } else {
-                 orderDate = new Date(order.fecha); 
-             }
-         } else {
-             orderDate = new Date(order.fecha);
-         }
-      } catch(e) {
-         orderDate = new Date();
-      }
-      
-      sheet.appendRow([
-        maxNro,
-        orderDate,
-        order.llave,
-        parseFloat(order.monto),
-        "", 0, "Pendiente", "", "",
-        (order.envio && order.envio.trim() !== "") ? order.envio.toString() : "" // Columna J: Responsable
-      ]);
-      
-      addedCount++;
+  payload.orders.forEach(order => {
+    if(existingKeys.has(String(order.llave).trim())) return;
+    maxNro++;
+    // Columna J (10) para Responsable Envío
+    sheet.appendRow([maxNro, order.fecha, order.llave, parseFloat(order.monto), "", 0, "Pendiente", "", "", order.envio || ""]);
   });
-  
-  return { success: true, added: addedCount, skipped: skippedCount, message: `Importado: ${addedCount}, Duplicados: ${skippedCount}` };
+  return { success: true };
+}
+
+function crearPedido(data) {
+  const sheet = getSheet();
+  sheet.appendRow([data.nro, new Date(), data.llave, data.monto, "", 0, "Pendiente", "", "", data.envio || ""]);
+  return { success: true };
+}
+
+function rechazarPedido(data) {
+  const sheet = getSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] == data.nro) {
+      sheet.getRange(i + 1, 7).setValue("Cancelado");
+      sheet.getRange(i + 1, 8).setValue(data.usuario);
+      sheet.getRange(i + 1, 9).setValue(new Date());
+      return { success: true };
+    }
+  }
+  return { success: false };
 }

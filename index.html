@@ -77,8 +77,8 @@
                 </div>
             </div>
             <ul class="nav-links">
-                <li class="active"><a href="#"><i class="fa-solid fa-table-list"></i> Pedidos</a></li>
-                <!-- Future links could go here -->
+                <li class="active" id="nav-pedidos"><a href="#"><i class="fa-solid fa-table-list"></i> Pedidos</a></li>
+                <li id="nav-reportes"><a href="#"><i class="fa-solid fa-file-invoice"></i> Reportes</a></li>
             </ul>
             <button id="logout-btn" class="logout-link">
                 <i class="fa-solid fa-right-from-bracket"></i> Salir
@@ -87,113 +87,161 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <header class="top-bar glass-panel">
-                <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center; flex: 1;">
-                    <input type="date" id="date-filter" class="search-input"
-                        style="width: auto; padding: 8px 12px; color-scheme: dark; background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
 
-                    <button id="btn-date-range" class="btn-secondary" style="padding: 8px 12px; font-size: 0.9em;">
-                        <i class="fa-solid fa-calendar-week"></i> Corte
-                    </button>
-                    <span id="range-display-text"
-                        style="font-size: 0.85em; color: rgba(255,255,255,0.7); margin-left:8px;"></span>
+            <!-- CONTENEDOR PRINCIPAL: PEDIDOS -->
+            <div id="app-content">
+                <header class="top-bar glass-panel">
+                    <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center; flex: 1;">
+                        <input type="date" id="date-filter" class="search-input"
+                            style="width: auto; padding: 8px 12px; color-scheme: dark; background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
 
-                    <div class="search-wrapper" style="position: relative; flex: 1; max-width: 300px;">
-                        <i class="fa-solid fa-magnifying-glass"
-                            style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.5); pointer-events: none;"></i>
-                        <input type="text" id="search-input" class="search-input" placeholder="Buscar por llave, nro..."
-                            style="padding-left: 38px; width: 100%;">
-                    </div>
-                </div>
-                <button id="refresh-btn" class="btn-icon" title="Actualizar datos">
-                    <i class="fa-solid fa-rotate-right"></i>
-                </button>
-                <div style="display: flex; gap: 10px;">
-                    <button id="import-btn" class="btn-secondary" title="Carga Masiva (PDF/CSV)"
-                        style="padding: 10px 15px;">
-                        <i class="fa-solid fa-file-csv"></i>
-                    </button>
-                    <button id="import-text-btn" class="btn-secondary" title="Pegar Pedidos"
-                        style="padding: 10px 15px; margin-left: 5px;">
-                        <i class="fa-solid fa-paste"></i>
-                    </button>
-                    <button id="new-order-btn" class="btn-primary">
-                        <i class="fa-solid fa-plus"></i> Nuevo Pedido
-                    </button>
-                </div>
-            </header>
+                        <button id="btn-date-range" class="btn-secondary" style="padding: 8px 12px; font-size: 0.9em;">
+                            <i class="fa-solid fa-calendar-week"></i> Corte
+                        </button>
+                        <span id="range-display-text"
+                            style="font-size: 0.85em; color: rgba(255,255,255,0.7); margin-left:8px;"></span>
 
-            <!-- Stats Cards -->
-            <div class="stats-container">
-                <div class="stat-card total">
-                    <div class="stat-icon combined"><i class="fa-solid fa-layer-group"></i></div>
-                    <div class="stat-info">
-                        <h4>Total</h4>
-                        <p class="stat-value" id="stat-total-amount">S/ 0.00</p>
-                        <p class="stat-subtext" id="stat-total-count">0 pedidos</p>
+                        <div class="search-wrapper" style="position: relative; flex: 1; max-width: 300px;">
+                            <i class="fa-solid fa-magnifying-glass"
+                                style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.5); pointer-events: none;"></i>
+                            <input type="text" id="search-input" class="search-input"
+                                placeholder="Buscar por llave, nro..." style="padding-left: 38px; width: 100%;">
+                        </div>
                     </div>
-                </div>
-                <div class="stat-card pending">
-                    <div class="stat-icon pending"><i class="fa-regular fa-clock"></i></div>
-                    <div class="stat-info">
-                        <h4>Pendientes</h4>
-                        <p class="stat-value" id="stat-pending-amount">S/ 0.00</p>
-                        <p class="stat-subtext" id="stat-pending-count">0 pedidos</p>
+                    <button id="refresh-btn" class="btn-icon" title="Actualizar datos">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="import-btn" class="btn-secondary" title="Carga Masiva (PDF/CSV)"
+                            style="padding: 10px 15px;">
+                            <i class="fa-solid fa-file-csv"></i>
+                        </button>
+                        <button id="import-text-btn" class="btn-secondary" title="Pegar Pedidos"
+                            style="padding: 10px 15px; margin-left: 5px;">
+                            <i class="fa-solid fa-paste"></i>
+                        </button>
+                        <button id="new-order-btn" class="btn-primary">
+                            <i class="fa-solid fa-plus"></i> Nuevo Pedido
+                        </button>
                     </div>
-                </div>
-                <div class="stat-card validated" id="card-validated" style="cursor: pointer;">
-                    <div class="stat-icon validated"><i class="fa-solid fa-check-double"></i></div>
-                    <div class="stat-info">
-                        <h4>Validados</h4>
-                        <p class="stat-value" id="stat-validated-amount">S/ 0.00</p>
-                        <p class="stat-subtext" id="stat-validated-count">0 pedidos</p>
-                    </div>
-                </div>
-                <div class="stat-card rejected">
-                    <div class="stat-icon rejected"><i class="fa-solid fa-ban"></i></div>
-                    <div class="stat-info">
-                        <h4>Cancelados</h4>
-                        <p class="stat-value" id="stat-rejected-amount">S/ 0.00</p>
-                        <p class="stat-subtext" id="stat-rejected-count">0 pedidos</p>
-                    </div>
-                </div>
-            </div>
+                </header>
 
-            <!-- Orders Table -->
-            <div class="content-panel glass-panel">
-                <div class="panel-header">
-                    <h2>Listado de Pedidos</h2>
-                    <div class="filter-tabs">
-                        <button class="filter-tab active" data-filter="all">Todos</button>
-                        <button class="filter-tab" data-filter="Validado">Validados</button>
-                        <button class="filter-tab" data-filter="Pendiente">Pendientes</button>
-                        <button class="filter-tab" data-filter="Cancelado">Cancelados</button>
+                <!-- Stats Cards -->
+                <div class="stats-container">
+                    <div class="stat-card total">
+                        <div class="stat-icon combined"><i class="fa-solid fa-layer-group"></i></div>
+                        <div class="stat-info">
+                            <h4>Total</h4>
+                            <p class="stat-value" id="stat-total-amount">S/ 0.00</p>
+                            <p class="stat-subtext" id="stat-total-count">0 pedidos</p>
+                        </div>
+                    </div>
+                    <div class="stat-card pending">
+                        <div class="stat-icon pending"><i class="fa-regular fa-clock"></i></div>
+                        <div class="stat-info">
+                            <h4>Pendientes</h4>
+                            <p class="stat-value" id="stat-pending-amount">S/ 0.00</p>
+                            <p class="stat-subtext" id="stat-pending-count">0 pedidos</p>
+                        </div>
+                    </div>
+                    <div class="stat-card validated" id="card-validated" style="cursor: pointer;">
+                        <div class="stat-icon validated"><i class="fa-solid fa-check-double"></i></div>
+                        <div class="stat-info">
+                            <h4>Validados</h4>
+                            <p class="stat-value" id="stat-validated-amount">S/ 0.00</p>
+                            <p class="stat-subtext" id="stat-validated-count">0 pedidos</p>
+                        </div>
+                    </div>
+                    <div class="stat-card rejected">
+                        <div class="stat-icon rejected"><i class="fa-solid fa-ban"></i></div>
+                        <div class="stat-info">
+                            <h4>Cancelados</h4>
+                            <p class="stat-value" id="stat-rejected-amount">S/ 0.00</p>
+                            <p class="stat-subtext" id="stat-rejected-count">0 pedidos</p>
+                        </div>
                     </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="orders-table">
-                        <thead>
-                            <tr>
-                                <th>Nro</th>
-                                <th>Fecha</th>
-                                <th>Llave</th>
-                                <th>Monto</th>
-                                <th>Estado</th>
-                                <th>Envío</th>
-                                <th>Foto</th>
-                                <th>Validado por</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="orders-table-body">
-                            <!-- Rows inserted by JS -->
-                        </tbody>
-                    </table>
+
+                <!-- Orders Table -->
+                <div class="content-panel glass-panel">
+                    <div class="panel-header">
+                        <h2>Listado de Pedidos</h2>
+                        <div class="filter-tabs">
+                            <button class="filter-tab active" data-filter="all">Todos</button>
+                            <button class="filter-tab" data-filter="Validado">Validados</button>
+                            <button class="filter-tab" data-filter="Pendiente">Pendientes</button>
+                            <button class="filter-tab" data-filter="Cancelado">Cancelados</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="orders-table">
+                            <thead>
+                                <tr>
+                                    <th>Nro</th>
+                                    <th>Fecha</th>
+                                    <th>Llave</th>
+                                    <th>Monto</th>
+                                    <th>Estado</th>
+                                    <th>Envío</th>
+                                    <th>Foto</th>
+                                    <th>Validado por</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orders-table-body">
+                                <!-- Rows inserted by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="loading-indicator" class="table-loading">
+                        <div class="spinner"></div> Cargando datos...
+                    </div>
                 </div>
-                <div id="loading-indicator" class="table-loading">
-                    <div class="spinner"></div> Cargando datos...
+            </div> <!-- End APP Content -->
+
+            <!-- CONTENEDOR PRINCIPAL: REPORTES -->
+            <div id="reports-content" class="hidden" style="height: 100%; display: flex; flex-direction: column;">
+                <header class="top-bar glass-panel" style="justify-content: space-between;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span style="font-weight: 600; font-size: 1.1em;"><i class="fa-solid fa-file-invoice"></i>
+                            Reportes de Validación</span>
+                        <input type="date" id="report-date-filter" class="search-input"
+                            style="width: auto; padding: 8px 12px; color-scheme: dark; background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-left: 20px;">
+                    </div>
+                    <button id="btn-print-report" class="btn-primary">
+                        <i class="fa-solid fa-print"></i> Imprimir / Guardar PDF
+                    </button>
+                </header>
+
+                <div class="content-panel glass-panel" style="flex: 1; display: flex; flex-direction: column;">
+                    <div class="panel-header printable-header hidden">
+                        <h2 id="print-title"
+                            style="text-align: center; color: black; font-family: monospace; font-size: 1.5em; border: 1px solid black; padding: 10px; border-radius: 20px; display: inline-block; margin-bottom: 20px; text-transform: uppercase;">
+                        </h2>
+                    </div>
+
+                    <div class="table-responsive" style="flex: 1; border-radius: 0;">
+                        <table class="orders-table printable-table" id="reports-table">
+                            <thead>
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>LLave</th>
+                                    <th>Driver</th>
+                                    <th>Tipo/Pago</th>
+                                    <th>Monto</th>
+                                    <th>Vuelto</th>
+                                    <th>Validación</th>
+                                    <th>Hora</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reports-table-body">
+                                <!-- Report rows injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            </div> <!-- End Reports Content -->
+
         </main>
     </section>
 
@@ -314,7 +362,8 @@
                         <i class="fa-solid fa-clipboard"
                             style="font-size: 2.5em; margin-bottom: 15px; color: rgba(255,255,255,0.8);"></i>
                         <p style="font-size: 1.1em; margin-bottom: 5px;">Haz clic aquí y luego presiona
-                            <strong>Ctrl+V</strong></p>
+                            <strong>Ctrl+V</strong>
+                        </p>
                         <p style="font-size: 0.85em; opacity: 0.7;">Para pegar las filas copiadas desde la plataforma
                         </p>
                     </div>
@@ -381,6 +430,9 @@
     </div>
 
 
+    <!-- Tesseract (OCR) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
     <!-- PDF.js Libs (Add before scripts) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -418,24 +470,51 @@
 
                         <div class="form-group">
                             <label>Tipo de Validación</label>
-                            <div class="validation-type-selector">
+                            <div class="validation-type-selector" style="grid-template-columns: 1fr 1fr 1fr;">
                                 <label class="radio-label">
-                                    <input type="radio" name="valType" value="foto" checked>
-                                    <span><i class="fa-regular fa-image"></i> Foto</span>
-                                </label>
-                                <label class="radio-label">
-                                    <input type="radio" name="valType" value="efectivo">
-                                    <span><i class="fa-solid fa-money-bill-wave"></i> Efectivo</span>
+                                    <input type="radio" name="valType" value="pos" checked>
+                                    <span><i class="fa-solid fa-calculator"></i> POS</span>
                                 </label>
                                 <label class="radio-label">
                                     <input type="radio" name="valType" value="online">
                                     <span><i class="fa-solid fa-globe"></i> Online</span>
                                 </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="valType" value="efectivo">
+                                    <span><i class="fa-solid fa-money-bill-wave"></i> Efectivo</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Sub-opciones Dinámicas -->
+                        <div id="sub-options-container" class="form-group"
+                            style="padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid var(--glass-border);">
+
+                            <!-- Opciones POS -->
+                            <div id="pos-options" style="display: block;">
+                                <label>Medio de Pago por POS:</label>
+                                <select id="val-pos-type" class="form-control" style="margin-top: 5px; width: 100%;">
+                                    <option value="TARJETA">Tarjeta (Crédito/Débito)</option>
+                                    <option value="QR">Código QR (Yape/Plin)</option>
+                                </select>
+                            </div>
+
+                            <!-- Opciones Efectivo -->
+                            <div id="efectivo-options" style="display: none;">
+                                <label>Vuelto Entregado (S/):</label>
+                                <input type="number" id="val-vuelto-amount" class="form-control" step="0.01"
+                                    placeholder="Ej: 15.50" style="margin-top: 5px; width: 100%;">
+                            </div>
+
+                            <!-- Opciones Online (Solo informativo) -->
+                            <div id="online-options" style="display: none;">
+                                <small style="color: var(--text-muted);"><i class="fa-solid fa-circle-info"></i> La
+                                    validación Online requiere foto de captura del banco.</small>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label id="lbl-monto-val">Monto en Foto</label>
+                            <label id="lbl-monto-val">Monto Pagado</label>
                             <div class="input-with-ocr">
                                 <input type="number" id="val-photo-amount" step="0.01" placeholder="0.00">
                                 <button type="button" id="ocr-trigger-btn" class="btn-icon-small"
@@ -443,7 +522,8 @@
                                     <i class="fa-solid fa-eye"></i>
                                 </button>
                             </div>
-                            <small id="ocr-helper-text">Sube una foto para detectar.</small>
+                            <small id="ocr-helper-text">Sube una foto para detectar el monto (opcional en
+                                Efectivo/Online).</small>
                         </div>
 
                         <div class="modal-actions">

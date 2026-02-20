@@ -103,6 +103,40 @@ document.getElementById('logout-btn').addEventListener('click', () => {
     location.reload();
 });
 
+// --- Navigation ---
+const navPedidos = document.getElementById('nav-pedidos');
+const navReportes = document.getElementById('nav-reportes');
+const contentPedidos = document.getElementById('app-content');
+const contentReportes = document.getElementById('reports-content');
+
+navPedidos.addEventListener('click', (e) => {
+    e.preventDefault();
+    navPedidos.classList.add('active');
+    navReportes.classList.remove('active');
+    contentPedidos.style.display = 'block';
+    contentReportes.classList.add('hidden');
+});
+
+navReportes.addEventListener('click', (e) => {
+    e.preventDefault();
+    navReportes.classList.add('active');
+    navPedidos.classList.remove('active');
+    contentPedidos.style.display = 'none';
+    contentReportes.classList.remove('hidden');
+
+    // Default to today for report
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const inputDate = document.getElementById('report-date-filter');
+    if (!inputDate.value) {
+        inputDate.value = `${yyyy}-${mm}-${dd}`;
+    }
+
+    renderReportsTable();
+});
+
 // --- Orders Management ---
 
 async function loadOrders() {
@@ -110,7 +144,8 @@ async function loadOrders() {
     try {
         const response = await fetchAPI('listarPedidos');
         if (response.success) {
-            orders = response.data;
+            // Sort by nro descending to show newest first
+            orders = response.data.sort((a, b) => b.nro - a.nro);
             applyFilters();
         }
     } catch (error) {
@@ -139,7 +174,7 @@ function renderOrders(data) {
                 ${order.foto === 'PAGO-EFECTIVO' ?
                 '<span class="badge" style="background:rgba(16, 185, 129, 0.2); color:#4ade80; border:1px solid rgba(74, 222, 128, 0.3); cursor:default"><i class="fa-solid fa-money-bill-wave"></i> Efectivo</span>' :
                 (order.foto === 'PAGO-ONLINE' ? '<span class="badge" style="background:rgba(59, 130, 246, 0.2); color:#60a5fa; border:1px solid rgba(96, 165, 250, 0.3); cursor:default"><i class="fa-solid fa-globe"></i> Online</span>' :
-                    (order.foto ? '<a href="' + order.foto + '" target="_blank" class="btn-icon-small"><i class="fa-solid fa-image"></i></a>' : '<span class="text-muted">-</span>'))}
+                    (order.foto ? `<a href="${extractPhotoUrl(order.foto)}" target="_blank" class="btn-icon-small"><i class="fa-solid fa-image"></i></a>` : '<span class="text-muted">-</span>'))}
             </td>
             <td style="font-size: 0.85em; color: rgba(255,255,255,0.8);">
                 ${order.validado_por || '<span class="text-muted">-</span>'}
@@ -158,6 +193,118 @@ function renderOrders(data) {
             </td>
         `;
         ordersTableBody.appendChild(tr);
+    });
+}
+
+// --- Reports Logic ---
+
+document.getElementById('report-date-filter').addEventListener('change', renderReportsTable);
+document.getElementById('btn-print-report').addEventListener('click', () => {
+    window.print();
+});
+
+function getDayName(dateString) {
+    // We adjust for timezone offset assuming dateString is YYYY-MM-DD
+    const d = new Date(dateString + 'T12:00:00');
+    const dias = ['DOMINGO', 'LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO'];
+    return dias[d.getDay()];
+}
+
+function renderReportsTable() {
+    const reportDate = document.getElementById('report-date-filter').value;
+    const tbody = document.getElementById('reports-table-body');
+    const title = document.getElementById('print-title');
+    tbody.innerHTML = '';
+
+    if (!reportDate) return;
+
+    // Set Dynamic Title
+    const parts = reportDate.split('-'); // 2026-02-20
+    const formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`; // 20/02/2026
+    const dayName = getDayName(reportDate);
+    title.textContent = `TADA ATE - VALIDACION DE COBROS [${dayName} ${formattedDate}]`;
+
+    // Filter by exact date
+    const targetDateObj = new Date(reportDate + 'T12:00:00');
+    const filteredForReport = orders.filter(o => {
+        if (!o.fecha) return false;
+        try {
+            const orderDate = new Date(o.fecha);
+            return orderDate.getFullYear() === targetDateObj.getFullYear() &&
+                orderDate.getMonth() === targetDateObj.getMonth() &&
+                orderDate.getDate() === targetDateObj.getDate();
+        } catch (e) { return false; }
+    });
+
+    if (filteredForReport.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 20px;">No hay reportes para esta fecha</td></tr>';
+        return;
+    }
+
+    filteredForReport.forEach((order, index) => {
+        const correlativeCode = String(index + 1).padStart(2, '0');
+
+        // 1. Hora
+        let horaFormat = '-';
+        if (order.fecha) {
+            try {
+                horaFormat = new Date(order.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+                horaFormat = horaFormat.toLowerCase().replace(' ', ''); // 11:20am
+            } catch (e) { }
+        }
+
+        // 2. Tipo Pago mapping
+        let tipoDisplay = '-';
+
+        // Priority: Check if the order object already has a clear "tipo" property
+        if (order.tipo) {
+            tipoDisplay = order.tipo.toUpperCase();
+        }
+        // Fallback: Extract from the "foto" string if it's an injected URL
+        else if (order.foto && typeof order.foto === 'string') {
+            const f = order.foto.toUpperCase();
+            if (f.includes('TARJETA')) tipoDisplay = 'TARJETA';
+            else if (f.includes('QR')) tipoDisplay = 'QR';
+            else if (f.includes('ONLINE')) tipoDisplay = 'ONLINE';
+            else if (f.includes('EFECTIVO')) tipoDisplay = 'EFECTIVO';
+            else if (order.estado === 'Cancelado') tipoDisplay = 'CANCELADO';
+            else tipoDisplay = 'FOTO';
+        }
+        else if (order.estado === 'Cancelado') {
+            tipoDisplay = 'CANCELADO';
+        }
+
+        // 3. Validacion Tick
+        let validTick = order.estado === 'Validado' ? '✓' : '';
+
+        // 5. Vuelto mapping (Detection from URL or direct property)
+        let vueltoDisplay = '';
+        if (tipoDisplay === 'EFECTIVO') {
+            if (order.vuelto && order.vuelto != 0) {
+                vueltoDisplay = parseFloat(order.vuelto).toFixed(2);
+            } else if (order.foto && typeof order.foto === 'string' && order.foto.includes('VUELTO:')) {
+                const match = order.foto.match(/VUELTO:\s*([\d.]+)/i);
+                if (match) {
+                    vueltoDisplay = parseFloat(match[1]).toFixed(2);
+                }
+            }
+        }
+
+        // Ensure dash if no driver exists
+        let envioDisplay = order.envio ? order.envio : '-';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${correlativeCode})</td>
+            <td>${order.llave}</td>
+            <td>${envioDisplay}</td>
+            <td>${tipoDisplay}</td>
+            <td>${parseFloat(order.monto).toFixed(2)}</td>
+            <td>${vueltoDisplay}</td>
+            <td>${validTick}</td>
+            <td style="font-size: 0.8em; color: var(--text-muted);">${horaFormat}</td>
+        `;
+        tbody.appendChild(tr);
     });
 }
 
@@ -290,22 +437,37 @@ window.openValidateModal = (nro) => {
     valPhotoAmountInput.value = '';
 
     // Reset Validation Mode Default
-    document.querySelector('input[name="valType"][value="foto"]').checked = true;
-    updateValidationMode('foto');
+    document.querySelector('input[name="valType"][value="pos"]').checked = true;
+    updateValidationMode('pos');
 
     // If order already has photo/validation
-    if (order.foto === 'PAGO-EFECTIVO') {
+    const cleanUrl = extractPhotoUrl(order.foto);
+    if (order.foto && order.foto.includes('EFECTIVO')) {
         document.querySelector('input[name="valType"][value="efectivo"]').checked = true;
         updateValidationMode('efectivo');
-    } else if (order.foto === 'PAGO-ONLINE') {
+        // Extract Vuelto from text if possible to pre-fill
+        const match = order.foto.match(/VUELTO:\s*([\d.]+)/i);
+        if (match) document.getElementById('val-vuelto-amount').value = match[1];
+    } else if (order.foto && order.foto.includes('ONLINE')) {
         document.querySelector('input[name="valType"][value="online"]').checked = true;
         updateValidationMode('online');
-    } else if (order.foto) {
-        photoPreview.src = order.foto;
+    } else if (order.foto && order.foto.includes('QR')) {
+        document.querySelector('input[name="valType"][value="pos"]').checked = true;
+        document.getElementById('val-pos-type').value = 'QR';
+        updateValidationMode('pos');
+    } else if (order.foto && order.foto.includes('TARJETA')) {
+        document.querySelector('input[name="valType"][value="pos"]').checked = true;
+        document.getElementById('val-pos-type').value = 'TARJETA';
+        updateValidationMode('pos');
+    }
+
+    // Load Image Preview if URL exists
+    if (cleanUrl) {
+        photoPreview.src = cleanUrl;
         photoPreview.classList.remove('hidden');
         uploadPlaceholder.classList.add('hidden');
         document.getElementById('photo-actions').classList.remove('hidden');
-        document.getElementById('view-full-photo').href = order.foto;
+        document.getElementById('view-full-photo').href = cleanUrl;
     }
 
     // Set status
@@ -366,27 +528,43 @@ valTypeRadios.forEach(radio => {
 
 function updateValidationMode(mode) {
     const photoColumn = document.querySelector('.photo-column');
-    const label = document.querySelector('#validate-form label:first-of-type'); // Or better selector
     const ocrBtn = document.getElementById('ocr-trigger-btn');
     const helperParams = document.getElementById('ocr-helper-text');
 
-    // Suggest amount if switching to cash/online
-    if (mode === 'efectivo' || mode === 'online') {
-        photoColumn.style.display = 'none';
-        ocrBtn.style.display = 'none';
-        helperParams.textContent = mode === 'efectivo' ? 'Ingrese monto recibido (Efectivo)' : 'Ingrese monto validado (Online)';
+    // Elements to toggle
+    const posOptions = document.getElementById('pos-options');
+    const efectivoOptions = document.getElementById('efectivo-options');
+    const onlineOptions = document.getElementById('online-options');
 
+    // Reset Defaults
+    posOptions.style.display = 'none';
+    efectivoOptions.style.display = 'none';
+    onlineOptions.style.display = 'none';
+
+    // Tocar UI según modo
+    if (mode === 'pos') {
+        posOptions.style.display = 'block';
+        ocrBtn.style.display = 'inline-block';
+        helperParams.textContent = 'Sube la foto del voucher POS para leer monto.';
+    } else if (mode === 'efectivo') {
+        efectivoOptions.style.display = 'block';
+        ocrBtn.style.display = 'none'; // No escaneamos billetes
+        helperParams.textContent = 'Sube una foto del billete/monedas (Obligatorio). Ingrese monto manualmente.';
+    } else if (mode === 'online') {
+        onlineOptions.style.display = 'block';
+        ocrBtn.style.display = 'none'; // No escaneamos pantallas de yape
+        helperParams.textContent = 'Sube captura de pantalla de la transferencia (Obligatorio). Ingrese monto manualmente.';
+    }
+
+    // Sugerir monto si no es POS
+    if (mode !== 'pos') {
         if (!valPhotoAmountInput.value && currentOrderForValidation) {
             valPhotoAmountInput.value = parseFloat(currentOrderForValidation.monto).toFixed(2);
             validateAmounts();
         }
     } else {
-        photoColumn.style.display = 'block';
-        ocrBtn.style.display = 'inline-block';
-        helperParams.textContent = 'Sube una foto para detectar.';
-
         if (currentOrderForValidation && valPhotoAmountInput.value === parseFloat(currentOrderForValidation.monto).toFixed(2)) {
-            valPhotoAmountInput.value = ''; // clear auto suggestion
+            valPhotoAmountInput.value = ''; // clear auto suggestion for POS
             validateAmounts();
         }
     }
@@ -677,27 +855,37 @@ validateForm.addEventListener('submit', async (e) => {
     const file = photoInput.files[0];
     let fileData = null;
 
-    if (valType === 'foto') {
-        if (file) {
-            fileData = await toBase64(file);
-        } else if (!currentOrderForValidation.foto) {
-            Swal.fire('Error', 'Debe subir una foto para validar.', 'warning');
-            return;
-        }
+    if (!file && !currentOrderForValidation.foto) {
+        // En esta nueva versión TODO obliga foto a menos que ya existía una.
+        Swal.fire('Error', 'Debe subir una foto o captura de pantalla como evidencia.', 'warning');
+        return;
+    }
+
+    if (file) {
+        fileData = await toBase64(file);
     }
 
     const startUpload = async () => {
         Swal.fire({ title: 'Guardando...', didOpen: () => Swal.showLoading() });
         const montoFoto = parseFloat(valPhotoAmountInput.value);
 
+        // Extraer valores adicionales de la UI
+        let tipoFinal = 'FOTO';
+        if (valType === 'pos') {
+            const posType = document.getElementById('val-pos-type').value; // TARJETA o QR
+            tipoFinal = posType; // Envía directamente TARJETA o QR
+        } else if (valType === 'online') {
+            tipoFinal = 'ONLINE';
+        } else if (valType === 'efectivo') {
+            tipoFinal = 'EFECTIVO';
+        }
+
         const payload = {
             nro: currentOrderForValidation.nro,
             montoFoto: montoFoto,
             usuario: currentUser.usuario,
-            nro: currentOrderForValidation.nro,
-            montoFoto: montoFoto,
-            usuario: currentUser.usuario,
-            tipo: valType === 'foto' ? 'FOTO' : (valType === 'online' ? 'ONLINE' : 'EFECTIVO'),
+            tipo: tipoFinal,
+            vuelto: (valType === 'efectivo') ? document.getElementById('val-vuelto-amount').value : '',
             archivo: fileData ? {
                 name: `pedido_${currentOrderForValidation.nro}_${Date.now()}.jpg`,
                 type: file ? file.type : 'image/jpeg',
@@ -742,6 +930,25 @@ const toBase64 = file => new Promise((resolve, reject) => {
 
 function setLoading(active) {
     document.getElementById('login-loading').style.display = active ? 'flex' : 'none';
+}
+
+function extractPhotoUrl(fotoStr) {
+    if (!fotoStr || typeof fotoStr !== 'string') return '';
+    if (fotoStr.startsWith('PAGO-')) return ''; // Casos legacy o manuales sin link
+
+    // El link de drive termina cuando empieza un espacio (donde inyectamos el tipo)
+    let url = fotoStr.split(' ')[0];
+
+    // Si es un link de Drive estándar, convertirlo a link directo para <img>
+    if (url.includes('drive.google.com')) {
+        // Buscar el ID del archivo
+        const idMatch = url.match(/\/d\/(.+?)\//) || url.match(/id=(.+?)(&|$)/);
+        if (idMatch) {
+            return `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
+        }
+    }
+
+    return url;
 }
 
 function formatMoney(amount) {
@@ -1284,17 +1491,25 @@ function parseRawCopiedText(text) {
                 i++;
             }
 
-            // Nombre del Repartidor (Envío)
+            // Lógica Inteligente para Envío y Monto:
+            // Si la línea actual empieza con "S/", es el monto y el envío estaba vacío.
             if (i < lines.length) {
-                envio = lines[i];
-                i++;
-            }
-
-            // Monto (Ej. S/ 56.29)
-            if (i < lines.length && lines[i].startsWith('S/')) {
-                const amountClean = lines[i].replace(/[^\d.,]/g, '').replace(',', '.');
-                monto = parseFloat(amountClean).toFixed(2);
-                i++;
+                if (lines[i].startsWith('S/')) {
+                    const amountClean = lines[i].replace(/[^\d.,]/g, '').replace(',', '.');
+                    monto = parseFloat(amountClean).toFixed(2);
+                    envio = ''; // Estaba vacío en el texto copiado
+                    i++;
+                } else {
+                    // Si no empieza con "S/", es el nombre del repartidor
+                    envio = lines[i];
+                    i++;
+                    // La siguiente línea debería ser el monto
+                    if (i < lines.length && lines[i].startsWith('S/')) {
+                        const amountClean = lines[i].replace(/[^\d.,]/g, '').replace(',', '.');
+                        monto = parseFloat(amountClean).toFixed(2);
+                        i++;
+                    }
+                }
             }
 
             // Re-armar Fecha y Hora
@@ -1382,6 +1597,10 @@ btnConfirmImportText.addEventListener('click', async () => {
             });
         }
     });
+
+    // Reverse the batch so the oldest items are inserted first in the DB
+    // and thus get a lower 'nro' than the newer ones in the same batch.
+    selectedOrders.reverse();
 
     Swal.fire({
         title: 'Importando...',

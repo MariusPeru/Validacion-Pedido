@@ -882,3 +882,70 @@ body {
     min-width: 100px;
     /* Ensure enough width */
 }
+
+/* Print Styles */
+@media print {
+    body, html {
+        background: white !important;
+        color: black !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        height: auto !important;
+    }
+
+    /* Hide UI Elements */
+    .sidebar, .top-bar, .stats-container, #login-section, .modal-backdrop, #app-content {
+        display: none !important;
+    }
+
+    /* Show only Reports Content */
+    #reports-content {
+        display: block !important;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        margin: 0;
+        background: white !important;
+    }
+
+    .printable-header {
+        display: block !important;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    #print-title {
+        color: black !important;
+        border-color: black !important;
+        background: transparent !important;
+    }
+
+    .content-panel.glass-panel {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        padding: 0 !important;
+    }
+
+    .printable-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+
+    .printable-table th, .printable-table td {
+        border: 1px solid black !important;
+        padding: 8px !important;
+        color: black !important;
+        font-size: 11pt !important;
+    }
+
+    .printable-table th {
+        background-color: #f0f0f0 !important;
+        font-weight: bold !important;
+        -webkit-print-color-adjust: exact;
+    }
+
+    /* Remove specific column hiding if any, ensure everything prints */
+}
