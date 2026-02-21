@@ -461,14 +461,15 @@ window.openValidateModal = (nro) => {
         updateValidationMode('online');
     } else if (tipoPago === 'QR') {
         document.querySelector('input[name="valType"][value="pos"]').checked = true;
-        document.getElementById('val-pos-type').value = 'QR';
+        setPosType('QR');
         updateValidationMode('pos');
     } else if (tipoPago === 'TARJETA') {
         document.querySelector('input[name="valType"][value="pos"]').checked = true;
-        document.getElementById('val-pos-type').value = 'TARJETA';
+        setPosType('TARJETA');
         updateValidationMode('pos');
     } else if (tipoPago === 'POS') {
         document.querySelector('input[name="valType"][value="pos"]').checked = true;
+        setPosType('TARJETA'); // Default to Tarjeta when POS is generic
         updateValidationMode('pos');
     } else if (order.foto) {
         // Backward compatibility: fallback to parsing foto string for old records
@@ -482,11 +483,11 @@ window.openValidateModal = (nro) => {
             updateValidationMode('online');
         } else if (order.foto.includes('QR')) {
             document.querySelector('input[name="valType"][value="pos"]').checked = true;
-            document.getElementById('val-pos-type').value = 'QR';
+            setPosType('QR');
             updateValidationMode('pos');
         } else if (order.foto.includes('TARJETA')) {
             document.querySelector('input[name="valType"][value="pos"]').checked = true;
-            document.getElementById('val-pos-type').value = 'TARJETA';
+            setPosType('TARJETA');
             updateValidationMode('pos');
         }
     }
@@ -926,7 +927,7 @@ validateForm.addEventListener('submit', async (e) => {
         try {
             const res = await fetchAPI('validarPedido', payload);
             if (res.success) {
-                Swal.fire('Éxito', 'Validación registrada', 'success');
+                Swal.close(); // Cierra el "Guardando..."
                 document.getElementById('modal-validate').classList.remove('active');
                 loadOrders();
             } else {
@@ -941,6 +942,24 @@ validateForm.addEventListener('submit', async (e) => {
 });
 
 // --- Utilities ---
+
+// Toggle POS type buttons (Tarjeta / QR)
+function setPosType(tipo) {
+    document.getElementById('val-pos-type').value = tipo;
+    const btnTarjeta = document.getElementById('btn-pos-tarjeta');
+    const btnQR = document.getElementById('btn-pos-qr');
+    if (!btnTarjeta || !btnQR) return;
+    const activeStyle = 'background:var(--accent); color:white; border-color:var(--accent);';
+    const inactiveStyle = 'background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.7); border-color:rgba(255,255,255,0.2);';
+    if (tipo === 'TARJETA') {
+        btnTarjeta.style.cssText = btnTarjeta.style.cssText.replace(/background:[^;]+;|color:[^;]+;|border-color:[^;]+;/g, '');
+        Object.assign(btnTarjeta.style, { background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' });
+        Object.assign(btnQR.style, { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.2)' });
+    } else {
+        Object.assign(btnQR.style, { background: 'var(--accent)', color: 'white', borderColor: 'var(--accent)' });
+        Object.assign(btnTarjeta.style, { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.2)' });
+    }
+}
 
 async function fetchAPI(action, data = {}) {
     const response = await fetch(API_URL, {

@@ -496,10 +496,20 @@
                             <!-- Opciones POS -->
                             <div id="pos-options" style="display: block;">
                                 <label>Medio de Pago por POS:</label>
-                                <select id="val-pos-type" class="form-control" style="margin-top: 5px; width: 100%;">
-                                    <option value="TARJETA">Tarjeta (Crédito/Débito)</option>
-                                    <option value="QR">Código QR (Yape/Plin)</option>
-                                </select>
+                                <div style="display:flex; gap:10px; margin-top:8px;">
+                                    <button type="button" id="btn-pos-tarjeta" onclick="setPosType('TARJETA')"
+                                        class="btn-pos-toggle active"
+                                        style="flex:1; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:var(--accent); color:white; font-weight:600; cursor:pointer; transition:all 0.2s;">
+                                        <i class="fa-solid fa-credit-card"></i> Tarjeta
+                                    </button>
+                                    <button type="button" id="btn-pos-qr" onclick="setPosType('QR')"
+                                        class="btn-pos-toggle"
+                                        style="flex:1; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.7); font-weight:600; cursor:pointer; transition:all 0.2s;">
+                                        <i class="fa-solid fa-qrcode"></i> QR
+                                    </button>
+                                </div>
+                                <!-- Campo oculto que mantiene el valor actual -->
+                                <input type="hidden" id="val-pos-type" value="TARJETA">
                             </div>
 
                             <!-- Opciones Efectivo -->
