@@ -433,6 +433,25 @@ window.openValidateModal = (nro) => {
     document.getElementById('val-amount-display').textContent = formatMoney(order.monto);
     document.getElementById('val-id').value = order.nro;
 
+    // Populate Extra Info Chips (Envio, Hora, Pago)
+    const extraInfoDiv = document.getElementById('val-extra-info');
+    extraInfoDiv.innerHTML = '';
+    const chipStyle = 'display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:0.78em; font-weight:600; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:rgba(255,255,255,0.85);';
+
+    if (order.envio) {
+        extraInfoDiv.innerHTML += `<span style="${chipStyle}"><i class="fa-solid fa-motorcycle" style="color:#60a5fa;"></i> ${order.envio}</span>`;
+    }
+    if (order.fecha) {
+        let horaChip = '-';
+        try {
+            horaChip = new Date(order.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+        } catch (e) { }
+        extraInfoDiv.innerHTML += `<span style="${chipStyle}"><i class="fa-solid fa-clock" style="color:#a78bfa;"></i> ${horaChip}</span>`;
+    }
+    if (order.pago) {
+        extraInfoDiv.innerHTML += `<span style="${chipStyle}"><i class="fa-solid fa-credit-card" style="color:#4ade80;"></i> ${order.pago}</span>`;
+    }
+
     // Reset photo inputs
     photoInput.value = '';
     photoPreview.classList.add('hidden');
@@ -1520,12 +1539,20 @@ function parseRawCopiedText(text) {
             let finalDate = fechaStr;
             if (fechaStr && horaStr) finalDate = `${fechaStr} ${horaStr}`;
 
+            // Método de Pago (línea siguiente después del monto)
+            let pago = '';
+            if (i < lines.length && !keyRegex.test(lines[i])) {
+                pago = lines[i];
+                i++;
+            }
+
             ordersFound.push({
                 llave: llave,
                 fecha: finalDate,
                 monto: monto,
                 envio: envio,
-                originalStatus: status // Útil para la vista previa
+                pago: pago,
+                originalStatus: status
             });
 
         } else {
@@ -1573,7 +1600,8 @@ function renderImportTextTable(importedOrders) {
             <td style="font-weight: bold;">${order.llave}</td>
             <td>${order.fecha}</td>
             <td style="color:var(--success);">S/ ${order.monto}</td>
-            <td>${order.envio}</td>
+            <td>${order.envio || '<span class="text-muted">-</span>'}</td>
+            <td style="font-size:0.85em; opacity:0.85;">${order.pago || '<span class="text-muted">-</span>'}</td>
             <td>${statusHTML}</td>
         `;
         importTextTableBody.appendChild(tr);
@@ -1597,7 +1625,8 @@ btnConfirmImportText.addEventListener('click', async () => {
                 fecha: cb.orderData.fecha,
                 monto: cb.orderData.monto,
                 envio: cb.orderData.envio,
-                nro: null // Correlativo generado por BD
+                pago: cb.orderData.pago || '',
+                nro: null
             });
         }
     });

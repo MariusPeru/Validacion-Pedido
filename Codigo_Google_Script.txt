@@ -47,10 +47,12 @@ function listarPedidos() {
   if (!sheet) return { success: false, message: "Hoja 'Pedidos' no encontrada" };
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: true, data: [] };
-  const data = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+  // Leemos 11 columnas (A..K) para incluir 'Pago Original' en columna K
+  const data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
   const pedidos = data.map(row => ({
     nro: row[0], fecha: row[1], llave: row[2], monto: row[3], foto: row[4],
-    monto_foto: row[5], estado: row[6], validado_por: row[7], fecha_validacion: row[8], envio: row[9]
+    monto_foto: row[5], estado: row[6], validado_por: row[7], fecha_validacion: row[8], envio: row[9],
+    pago: row[10] || '' // Columna K: Pago Original
   })).filter(p => p.nro);
   return { success: true, data: pedidos.sort((a, b) => b.nro - a.nro) };
 }
@@ -106,8 +108,8 @@ function crearPedidosMasivos(payload) {
   payload.orders.forEach(order => {
     if(existingKeys.has(String(order.llave).trim())) return;
     maxNro++;
-    // Columna J (10) para Responsable Envío
-    sheet.appendRow([maxNro, order.fecha, order.llave, parseFloat(order.monto), "", 0, "Pendiente", "", "", order.envio || ""]);
+    // Columna J (10): Responsable Envío | Columna K (11): Pago Original
+    sheet.appendRow([maxNro, order.fecha, order.llave, parseFloat(order.monto), "", 0, "Pendiente", "", "", order.envio || "", order.pago || ""]);
   });
   return { success: true };
 }
