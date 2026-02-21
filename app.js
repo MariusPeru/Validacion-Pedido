@@ -113,26 +113,30 @@ navPedidos.addEventListener('click', (e) => {
     e.preventDefault();
     navPedidos.classList.add('active');
     navReportes.classList.remove('active');
+    document.getElementById('nav-dashboard').classList.remove('active');
     contentPedidos.style.display = 'block';
     contentReportes.classList.add('hidden');
+    const dv = document.getElementById('dashboard-view');
+    if (dv) dv.style.display = 'none';
 });
 
 navReportes.addEventListener('click', (e) => {
     e.preventDefault();
     navReportes.classList.add('active');
     navPedidos.classList.remove('active');
+    document.getElementById('nav-dashboard').classList.remove('active');
     contentPedidos.style.display = 'none';
+    contentReportes.style.display = ''; // Limpiar inline style puesto por Dashboard
     contentReportes.classList.remove('hidden');
+    const dv = document.getElementById('dashboard-view');
+    if (dv) dv.style.display = 'none';
 
-    // Default to today for report
+    // Siempre mostrar la fecha de hoy al entrar a Reportes
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
-    const inputDate = document.getElementById('report-date-filter');
-    if (!inputDate.value) {
-        inputDate.value = `${yyyy}-${mm}-${dd}`;
-    }
+    document.getElementById('report-date-filter').value = `${yyyy}-${mm}-${dd}`;
 
     renderReportsTable();
 });
@@ -144,9 +148,11 @@ async function loadOrders() {
     try {
         const response = await fetchAPI('listarPedidos');
         if (response.success) {
-            // Sort by nro descending to show newest first
             orders = response.data.sort((a, b) => b.nro - a.nro);
             applyFilters();
+            if (typeof window.refreshDashboardIfVisible === 'function') {
+                window.refreshDashboardIfVisible();
+            }
         }
     } catch (error) {
         Swal.fire('Error', 'Error cargando pedidos', 'error');
@@ -189,12 +195,32 @@ function renderOrders(data) {
                 ${currentUser.rol === 'Admin' && order.estado !== 'Validado' ? `
                 <button class="btn-icon-small danger" onclick="rejectOrder(${order.nro})" title="Cancelar">
                     <i class="fa-solid fa-ban"></i>
+                </button>` : ''}
+                ${currentUser.rol === 'Admin' && order.estado === 'Validado' ? `
+                <button class="btn-icon-small ${order.sla_fuera ? 'danger' : ''}"
+                    onclick="toggleSLA(${order.nro})"
+                    title="${order.sla_fuera ? 'Fuera de SLA ⏱️ — Clic para desmarcar' : 'Marcar como fuera de SLA (>35 min)'}"
+                    style="${order.sla_fuera ? 'opacity:1;' : 'opacity:0.4;'}">
+                    <i class="fa-solid fa-stopwatch"></i>
                 </button>` : ''}`}
             </td>
         `;
         ordersTableBody.appendChild(tr);
     });
 }
+
+window.toggleSLA = async (nro) => {
+    try {
+        const res = await fetchAPI('marcarSLAFuera', { nro, usuario: currentUser.usuario });
+        if (res.success) {
+            loadOrders(); // Recarga tabla y dashboard
+        } else {
+            Swal.fire('Error', res.message, 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Error de conexión', 'error');
+    }
+};
 
 // --- Reports Logic ---
 

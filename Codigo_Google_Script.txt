@@ -21,6 +21,7 @@ function doPost(e) {
       case 'validarPedido':       result = validarPedido(payload); break;
       case 'rechazarPedido':      result = rechazarPedido(payload); break;
       case 'crearPedidosMasivos': result = crearPedidosMasivos(payload); break;
+      case 'marcarSLAFuera':      result = marcarSLAFuera(payload); break;
       default: result = { success: false, message: "Acción desconocida" };
     }
     output.setContent(JSON.stringify(result));
@@ -50,26 +51,47 @@ function listarPedidos() {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: true, data: [] };
 
-  // Leer 14 columnas (A..N)
-  const data = sheet.getRange(2, 1, lastRow - 1, 14).getValues();
+  // Leer 15 columnas (A..O)
+  const data = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
   const pedidos = data.map(row => ({
     nro:               row[0],
     fecha:             row[1],
     llave:             row[2],
     monto:             row[3],
-    foto:              row[4],   // E: Solo URL limpia
+    foto:              row[4],   // E: URL limpia
     monto_foto:        row[5],   // F
     estado:            row[6],   // G
     validado_por:      row[7],   // H
     fecha_validacion:  row[8],   // I
     envio:             row[9],   // J
-    pago:              row[10],  // K: Pago Original (texto plataforma)
-    tipo_pago:         row[11],  // L: TARJETA | QR | POS | EFECTIVO | ONLINE
-    vuelto:            row[12],  // M: Monto vuelto (solo efectivo)
-    motivo_cancelacion: row[13]  // N: Motivo cancelación
+    pago:              row[10],  // K: Pago Original
+    tipo_pago:         row[11],  // L: Tipo Pago Val.
+    vuelto:            row[12],  // M: Vuelto
+    motivo_cancelacion: row[13], // N: Motivo Cancelación
+    sla_fuera:         row[14]   // O: SLA Fuera Tiempo
   })).filter(p => p.nro);
 
   return { success: true, data: pedidos.sort((a, b) => b.nro - a.nro) };
+}
+
+function marcarSLAFuera(data) {
+  const sheet = getSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] == data.nro) {
+      const currentVal = rows[i][14];
+      const isEmpty = !currentVal || String(currentVal).trim() === '';
+      const cell = sheet.getRange(i + 1, 15);
+      if (isEmpty) {
+        cell.setValue(new Date()); // Marcar con fecha/hora actual
+        return { success: true, marked: true };
+      } else {
+        cell.clearContent();       // Limpiar correctamente la celda
+        return { success: true, marked: false };
+      }
+    }
+  }
+  return { success: false, message: "Pedido no encontrado" };
 }
 
 function validarPedido(data) {
