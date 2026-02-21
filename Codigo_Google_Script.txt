@@ -1,8 +1,11 @@
-// --- CÓDIGO GOOGLE APPS SCRIPT FINAL ---
-// Copia todo este contenido a tu editor de scripts de Google (Código.gs)
+// --- CÓDIGO GOOGLE APPS SCRIPT FINAL v3.0 ---
+// Hoja: "Pedidos" con 14 columnas (A-N)
+// A: Nro  B: Fecha  C: Llave  D: Monto  E: Foto(URL)  F: Monto Foto
+// G: Estado  H: Validado Por  I: Fecha Validación  J: Resp. Envío
+// K: Pago Original  L: Tipo Pago Val.  M: Vuelto  N: Motivo Cancelación
 
 function doGet(e) {
-  return HtmlService.createHtmlOutput("API Activa - Versión Final Corregida");
+  return HtmlService.createHtmlOutput("API Activa - v3.0 Columnas Limpias");
 }
 
 function doPost(e) {
@@ -11,13 +14,12 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents);
     const action = payload.action;
     let result = {};
-    
     switch(action) {
-      case 'login': result = login(payload.user, payload.pass); break;
-      case 'listarPedidos': result = listarPedidos(); break;
-      case 'crearPedido': result = crearPedido(payload); break;
-      case 'validarPedido': result = validarPedido(payload); break;
-      case 'rechazarPedido': result = rechazarPedido(payload); break;
+      case 'login':               result = login(payload.user, payload.pass); break;
+      case 'listarPedidos':       result = listarPedidos(); break;
+      case 'crearPedido':         result = crearPedido(payload); break;
+      case 'validarPedido':       result = validarPedido(payload); break;
+      case 'rechazarPedido':      result = rechazarPedido(payload); break;
       case 'crearPedidosMasivos': result = crearPedidosMasivos(payload); break;
       default: result = { success: false, message: "Acción desconocida" };
     }
@@ -28,11 +30,12 @@ function doPost(e) {
   return output;
 }
 
-function getSheet() { return SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos'); }
+function getSheet() {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pedidos');
+}
 
 function login(user, pass) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Usuarios');
-  if (!sheet) return { success: false, message: "Hoja 'Usuarios' no encontrada" };
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) == user && String(data[i][1]) == pass) {
@@ -44,16 +47,28 @@ function login(user, pass) {
 
 function listarPedidos() {
   const sheet = getSheet();
-  if (!sheet) return { success: false, message: "Hoja 'Pedidos' no encontrada" };
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: true, data: [] };
-  // Leemos 11 columnas (A..K) para incluir 'Pago Original' en columna K
-  const data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+
+  // Leer 14 columnas (A..N)
+  const data = sheet.getRange(2, 1, lastRow - 1, 14).getValues();
   const pedidos = data.map(row => ({
-    nro: row[0], fecha: row[1], llave: row[2], monto: row[3], foto: row[4],
-    monto_foto: row[5], estado: row[6], validado_por: row[7], fecha_validacion: row[8], envio: row[9],
-    pago: row[10] || '' // Columna K: Pago Original
+    nro:               row[0],
+    fecha:             row[1],
+    llave:             row[2],
+    monto:             row[3],
+    foto:              row[4],   // E: Solo URL limpia
+    monto_foto:        row[5],   // F
+    estado:            row[6],   // G
+    validado_por:      row[7],   // H
+    fecha_validacion:  row[8],   // I
+    envio:             row[9],   // J
+    pago:              row[10],  // K: Pago Original (texto plataforma)
+    tipo_pago:         row[11],  // L: TARJETA | QR | POS | EFECTIVO | ONLINE
+    vuelto:            row[12],  // M: Monto vuelto (solo efectivo)
+    motivo_cancelacion: row[13]  // N: Motivo cancelación
   })).filter(p => p.nro);
+
   return { success: true, data: pedidos.sort((a, b) => b.nro - a.nro) };
 }
 
@@ -61,36 +76,47 @@ function validarPedido(data) {
   var sheet = getSheet();
   var rows = sheet.getDataRange().getValues();
   var rowIndex = -1;
-  for (var i = 1; i < rows.length; i++) { if (rows[i][0] == data.nro) { rowIndex = i + 1; break; } }
-  if (rowIndex === -1) return { success: false, message: "No encontrado" };
-  
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] == data.nro) { rowIndex = i + 1; break; }
+  }
+  if (rowIndex === -1) return { success: false, message: "Pedido no encontrado" };
+
   var photoUrl = "";
   if (data.archivo && data.archivo.data) {
     try {
-      // TU ID DE CARPETA YA CONFIGURADO
-      var folderId = "1YO8veJ9RtTGOBdilEEnVHdPSLwsbGdRo"; 
-      var folder = (folderId && folderId.length > 10) ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
-      var blob = Utilities.newBlob(Utilities.base64Decode(data.archivo.data), data.archivo.type, data.archivo.name);
+      var folderId = "1YO8veJ9RtTGOBdilEEnVHdPSLwsbGdRo";
+      var folder = DriveApp.getFolderById(folderId);
+      var blob = Utilities.newBlob(
+        Utilities.base64Decode(data.archivo.data),
+        data.archivo.type,
+        data.archivo.name
+      );
       var file = folder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      photoUrl = "https://lh3.googleusercontent.com/d/" + file.getId(); // Link Directo
-    } catch(e) { photoUrl = "Error Foto: " + e.toString(); }
+      photoUrl = "https://lh3.googleusercontent.com/d/" + file.getId();
+    } catch(e) {
+      photoUrl = "Error al subir: " + e.toString();
+    }
   } else {
-    var current = rows[rowIndex-1][4] || "";
-    photoUrl = current.split(" ")[0]; // Mantener URL base si ya existía
+    // Mantener URL existente de columna E (ya está limpia)
+    photoUrl = rows[rowIndex - 1][4] || "";
+    // Si la URL guardada tiene texto concatenado por versiones anteriores, limpiarla
+    if (photoUrl && photoUrl.indexOf(' ') > -1) {
+      photoUrl = photoUrl.split(' ')[0];
+    }
   }
 
-  // INYECCIÓN DE DATOS: URL + TIPO + VUELTO
-  var injectedValue = photoUrl || "";
-  if (data.tipo) injectedValue += " " + data.tipo;
-  if (data.tipo === "EFECTIVO" && data.vuelto) injectedValue += " VUELTO: " + data.vuelto;
-  
-  // Guardar en Columnas E, F, G, H, I (Índices 5, 6, 7, 8, 9)
-  sheet.getRange(rowIndex, 5).setValue(injectedValue.trim()); // Foto/Inyectado
-  sheet.getRange(rowIndex, 6).setValue(data.montoFoto); // Monto OCR
-  sheet.getRange(rowIndex, 7).setValue("Validado"); 
-  sheet.getRange(rowIndex, 8).setValue(data.usuario);
-  sheet.getRange(rowIndex, 9).setValue(new Date()); 
+  // Guardar en columnas separadas y limpias
+  sheet.getRange(rowIndex, 5).setValue(photoUrl);           // E: URL limpia
+  sheet.getRange(rowIndex, 6).setValue(data.montoFoto || 0); // F: Monto foto OCR
+  sheet.getRange(rowIndex, 7).setValue("Validado");          // G: Estado
+  sheet.getRange(rowIndex, 8).setValue(data.usuario);        // H: Validado por
+  sheet.getRange(rowIndex, 9).setValue(new Date());          // I: Fecha validación
+  sheet.getRange(rowIndex, 12).setValue(data.tipo || "");    // L: Tipo Pago Val.
+  sheet.getRange(rowIndex, 13).setValue(                     // M: Vuelto
+    (data.tipo === "EFECTIVO" && data.vuelto) ? parseFloat(data.vuelto) : ""
+  );
+
   return { success: true };
 }
 
@@ -99,24 +125,51 @@ function crearPedidosMasivos(payload) {
   const data = sheet.getDataRange().getValues();
   let maxNro = 0;
   const existingKeys = new Set();
-  for(let i=1; i<data.length; i++) {
-    const currentNro = parseInt(data[i][0]);
-    if (currentNro > maxNro) maxNro = currentNro;
+  for (let i = 1; i < data.length; i++) {
+    const n = parseInt(data[i][0]);
+    if (n > maxNro) maxNro = n;
     if (data[i][2]) existingKeys.add(String(data[i][2]).trim());
   }
-  
+
   payload.orders.forEach(order => {
-    if(existingKeys.has(String(order.llave).trim())) return;
+    if (existingKeys.has(String(order.llave).trim())) return;
     maxNro++;
-    // Columna J (10): Responsable Envío | Columna K (11): Pago Original
-    sheet.appendRow([maxNro, order.fecha, order.llave, parseFloat(order.monto), "", 0, "Pendiente", "", "", order.envio || "", order.pago || ""]);
+    sheet.appendRow([
+      maxNro,           // A: Nro
+      order.fecha,      // B: Fecha
+      order.llave,      // C: Llave
+      parseFloat(order.monto), // D: Monto
+      "",               // E: Foto URL (vacía, se llena al validar)
+      0,                // F: Monto Foto
+      "Pendiente",      // G: Estado
+      "",               // H: Validado Por
+      "",               // I: Fecha Validación
+      order.envio || "", // J: Responsable Envío
+      order.pago || "", // K: Pago Original
+      "",               // L: Tipo Pago Val. (se llenará al validar)
+      "",               // M: Vuelto
+      ""                // N: Motivo Cancelación
+    ]);
   });
+
   return { success: true };
 }
 
 function crearPedido(data) {
   const sheet = getSheet();
-  sheet.appendRow([data.nro, new Date(), data.llave, data.monto, "", 0, "Pendiente", "", "", data.envio || ""]);
+  const rows = sheet.getDataRange().getValues();
+  let maxNro = 0;
+  for (let i = 1; i < rows.length; i++) { if (rows[i][0] > maxNro) maxNro = rows[i][0]; }
+
+  sheet.appendRow([
+    parseInt(data.nro) || maxNro + 1,
+    new Date(),
+    data.llave,
+    data.monto,
+    "", 0, "Pendiente", "", "",
+    data.envio || "",
+    "", "", "", ""
+  ]);
   return { success: true };
 }
 
@@ -125,11 +178,12 @@ function rechazarPedido(data) {
   const rows = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] == data.nro) {
-      sheet.getRange(i + 1, 7).setValue("Cancelado");
-      sheet.getRange(i + 1, 8).setValue(data.usuario);
-      sheet.getRange(i + 1, 9).setValue(new Date());
+      sheet.getRange(i + 1, 7).setValue("Cancelado");          // G: Estado
+      sheet.getRange(i + 1, 8).setValue(data.usuario);         // H
+      sheet.getRange(i + 1, 9).setValue(new Date());           // I
+      sheet.getRange(i + 1, 14).setValue(data.motivo || "");   // N: Motivo Cancelación
       return { success: true };
     }
   }
-  return { success: false };
+  return { success: false, message: "Pedido no encontrado" };
 }

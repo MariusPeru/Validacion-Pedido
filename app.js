@@ -257,40 +257,23 @@ function renderReportsTable() {
             } catch (e) { }
         }
 
-        // 2. Tipo Pago mapping
+        // 2. Tipo Pago — Read directly from column L (tipo_pago)
         let tipoDisplay = '-';
-
-        // Priority: Check if the order object already has a clear "tipo" property
-        if (order.tipo) {
-            tipoDisplay = order.tipo.toUpperCase();
-        }
-        // Fallback: Extract from the "foto" string if it's an injected URL
-        else if (order.foto && typeof order.foto === 'string') {
-            const f = order.foto.toUpperCase();
-            if (f.includes('TARJETA')) tipoDisplay = 'TARJETA';
-            else if (f.includes('QR')) tipoDisplay = 'QR';
-            else if (f.includes('ONLINE')) tipoDisplay = 'ONLINE';
-            else if (f.includes('EFECTIVO')) tipoDisplay = 'EFECTIVO';
-            else if (order.estado === 'Cancelado') tipoDisplay = 'CANCELADO';
-            else tipoDisplay = 'FOTO';
-        }
-        else if (order.estado === 'Cancelado') {
-            tipoDisplay = 'CANCELADO';
+        if (order.tipo_pago && String(order.tipo_pago).trim() !== '') {
+            tipoDisplay = String(order.tipo_pago).trim().toUpperCase();
+        } else if (order.estado === 'Cancelado' || order.estado === 'Rechazado') {
+            tipoDisplay = '-';
         }
 
         // 3. Validacion Tick
         let validTick = order.estado === 'Validado' ? '✓' : '';
 
-        // 5. Vuelto mapping (Detection from URL or direct property)
+        // 4. Vuelto — Read directly from column M (vuelto)
         let vueltoDisplay = '';
-        if (tipoDisplay === 'EFECTIVO') {
-            if (order.vuelto && order.vuelto != 0) {
-                vueltoDisplay = parseFloat(order.vuelto).toFixed(2);
-            } else if (order.foto && typeof order.foto === 'string' && order.foto.includes('VUELTO:')) {
-                const match = order.foto.match(/VUELTO:\s*([\d.]+)/i);
-                if (match) {
-                    vueltoDisplay = parseFloat(match[1]).toFixed(2);
-                }
+        if (tipoDisplay === 'EFECTIVO' && order.vuelto !== '' && order.vuelto !== null && order.vuelto !== undefined) {
+            const v = parseFloat(order.vuelto);
+            if (!isNaN(v) && v > 0) {
+                vueltoDisplay = v.toFixed(2);
             }
         }
 
@@ -465,23 +448,47 @@ window.openValidateModal = (nro) => {
 
     // If order already has photo/validation
     const cleanUrl = extractPhotoUrl(order.foto);
-    if (order.foto && order.foto.includes('EFECTIVO')) {
+    // Pre-fill validation type from tipo_pago (column L) — clean data
+    const tipoPago = (order.tipo_pago || '').toString().trim().toUpperCase();
+    if (tipoPago === 'EFECTIVO') {
         document.querySelector('input[name="valType"][value="efectivo"]').checked = true;
         updateValidationMode('efectivo');
-        // Extract Vuelto from text if possible to pre-fill
-        const match = order.foto.match(/VUELTO:\s*([\d.]+)/i);
-        if (match) document.getElementById('val-vuelto-amount').value = match[1];
-    } else if (order.foto && order.foto.includes('ONLINE')) {
+        if (order.vuelto !== '' && order.vuelto !== null && order.vuelto !== undefined) {
+            document.getElementById('val-vuelto-amount').value = parseFloat(order.vuelto) || '';
+        }
+    } else if (tipoPago === 'ONLINE') {
         document.querySelector('input[name="valType"][value="online"]').checked = true;
         updateValidationMode('online');
-    } else if (order.foto && order.foto.includes('QR')) {
+    } else if (tipoPago === 'QR') {
         document.querySelector('input[name="valType"][value="pos"]').checked = true;
         document.getElementById('val-pos-type').value = 'QR';
         updateValidationMode('pos');
-    } else if (order.foto && order.foto.includes('TARJETA')) {
+    } else if (tipoPago === 'TARJETA') {
         document.querySelector('input[name="valType"][value="pos"]').checked = true;
         document.getElementById('val-pos-type').value = 'TARJETA';
         updateValidationMode('pos');
+    } else if (tipoPago === 'POS') {
+        document.querySelector('input[name="valType"][value="pos"]').checked = true;
+        updateValidationMode('pos');
+    } else if (order.foto) {
+        // Backward compatibility: fallback to parsing foto string for old records
+        if (order.foto.includes('EFECTIVO')) {
+            document.querySelector('input[name="valType"][value="efectivo"]').checked = true;
+            updateValidationMode('efectivo');
+            const match = order.foto.match(/VUELTO:\s*([\d.]+)/i);
+            if (match) document.getElementById('val-vuelto-amount').value = match[1];
+        } else if (order.foto.includes('ONLINE')) {
+            document.querySelector('input[name="valType"][value="online"]').checked = true;
+            updateValidationMode('online');
+        } else if (order.foto.includes('QR')) {
+            document.querySelector('input[name="valType"][value="pos"]').checked = true;
+            document.getElementById('val-pos-type').value = 'QR';
+            updateValidationMode('pos');
+        } else if (order.foto.includes('TARJETA')) {
+            document.querySelector('input[name="valType"][value="pos"]').checked = true;
+            document.getElementById('val-pos-type').value = 'TARJETA';
+            updateValidationMode('pos');
+        }
     }
 
     // Load Image Preview if URL exists
@@ -1164,23 +1171,36 @@ document.querySelectorAll('.filter-tab').forEach(tab => {
 refreshBtn.addEventListener('click', loadOrders);
 
 window.rejectOrder = async (nro) => {
-    const result = await Swal.fire({
-        title: '¿Cancelar Pedido?',
-        text: "Esta acción no se puede deshacer.",
+    const { value: motivo, isConfirmed } = await Swal.fire({
+        title: '¿Por qué se cancela el pedido?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Sí, cancelar',
-        cancelButtonText: 'No'
+        cancelButtonColor: '#666',
+        confirmButtonText: '<i class="fa-solid fa-ban"></i> Cancelar Pedido',
+        cancelButtonText: 'Volver',
+        input: 'radio',
+        inputOptions: {
+            'Por consumidor': '🙋 Por consumidor',
+            'Por Punto de Venta': '🏪 Por Punto de Venta',
+            'Por Repartidor': '🚴 Por Repartidor'
+        },
+        inputValidator: (value) => {
+            if (!value) return 'Debes seleccionar un motivo para continuar.';
+        },
+        customClass: { input: 'swal-radio-group' }
     });
 
-    if (result.isConfirmed) {
-        Swal.showLoading();
+    if (isConfirmed && motivo) {
+        Swal.fire({ title: 'Cancelando...', didOpen: () => Swal.showLoading() });
         try {
-            const res = await fetchAPI('rechazarPedido', { nro, usuario: currentUser.usuario });
+            const res = await fetchAPI('rechazarPedido', {
+                nro,
+                usuario: currentUser.usuario,
+                motivo: motivo
+            });
             if (res.success) {
-                Swal.fire('Cancelado', 'El pedido ha sido marcado como cancelado.', 'success');
+                Swal.fire('Cancelado', `Pedido cancelado: <strong>${motivo}</strong>`, 'success');
                 loadOrders();
             } else {
                 Swal.fire('Error', res.message, 'error');
