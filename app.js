@@ -241,6 +241,10 @@ function renderReportsTable() {
         return;
     }
 
+    // Sort Chronologically for the report: Earliest orders first (opposite of main view)
+    // We sort by 'nro' ascending because 'nro' is the incremental ID from the DB
+    filteredForReport.sort((a, b) => a.nro - b.nro);
+
     filteredForReport.forEach((order, index) => {
         const correlativeCode = String(index + 1).padStart(2, '0');
 
