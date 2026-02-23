@@ -578,14 +578,16 @@
                             <p style="margin-bottom: 4px;">Click, arrastra imagen</p>
                             <p>o presiona <strong>Ctrl+V</strong></p>
                         </div>
-                        <img id="photo-preview" class="photo-preview hidden" alt="Vista previa"
-                            style="max-height: 550px; width: 100%; object-fit: contain;">
+                        <img id="photo-preview" class="photo-preview hidden" alt="Vista previa">
                         <div class="ocr-scanning-overlay hidden" id="ocr-overlay">
                             <div class="scanner-line"></div>
                             <span>Escaneando monto...</span>
                         </div>
                     </div>
                     <div id="photo-actions" class="photo-actions hidden">
+                        <button type="button" class="btn-secondary small" id="rotate-photo-btn" title="Girar 90°">
+                            <i class="fa-solid fa-rotate"></i> Girar
+                        </button>
                         <button type="button" class="btn-secondary small" id="remove-photo-btn">Cambiar
                             Foto</button>
                         <a href="#" target="_blank" id="view-full-photo" class="btn-secondary small">Ver

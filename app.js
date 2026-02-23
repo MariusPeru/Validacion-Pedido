@@ -461,8 +461,14 @@ window.openValidateModal = (nro) => {
         extraInfoDiv.innerHTML += `<span style="${chipStyle}"><i class="fa-solid fa-credit-card" style="color:#4ade80;"></i> ${order.pago}</span>`;
     }
 
-    // Reset photo inputs
     photoInput.value = '';
+    // Reset image transform state
+    currentZoom = 1;
+    currentRotation = 0;
+    translateX = 0;
+    translateY = 0;
+    updatePhotoTransform(false);
+
     photoPreview.classList.add('hidden');
     uploadPlaceholder.classList.remove('hidden');
     document.getElementById('photo-actions').classList.add('hidden');
@@ -656,8 +662,14 @@ function updateValidationMode(mode) {
     }
 }
 
-// Enable zoom on click
-photoPreview.addEventListener('click', () => {
+// Enable zoom on click (only if not dragged)
+photoPreview.addEventListener('click', (e) => {
+    // Si hubo un movimiento significativo, ignoramos el click
+    if (photoPreview.dataset.wasDragged === 'true') {
+        photoPreview.dataset.wasDragged = 'false';
+        return;
+    }
+
     if (photoPreview.src && !photoPreview.classList.contains('hidden')) {
         window.open(photoPreview.src, '_blank');
     }
@@ -732,6 +744,87 @@ document.addEventListener('paste', (e) => {
     }
 });
 
+let currentZoom = 1;
+let currentRotation = 0;
+let isDragging = false;
+let dragMoveThreshold = 5; // píxeles para considerar que fue un arrastre
+let startX, startY;
+let initialMouseX, initialMouseY;
+let translateX = 0;
+let translateY = 0;
+
+function updatePhotoTransform(smooth = true) {
+    photoPreview.style.transition = smooth ? 'transform 0.2s ease-out' : 'none';
+    photoPreview.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentZoom}) rotate(${currentRotation}deg)`;
+}
+
+photoPreview.addEventListener('mousedown', (e) => {
+    if (currentZoom > 1) {
+        isDragging = true;
+        photoPreview.dataset.wasDragged = 'false';
+        initialMouseX = e.clientX;
+        initialMouseY = e.clientY;
+
+        photoPreview.classList.add('grabbing');
+        startX = e.clientX - translateX;
+        startY = e.clientY - translateY;
+        e.preventDefault();
+    }
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    translateX = e.clientX - startX;
+    translateY = e.clientY - startY;
+
+    // Marcar como arrastrado si se mueve más allá del umbral
+    const dist = Math.sqrt(Math.pow(e.clientX - initialMouseX, 2) + Math.pow(e.clientY - initialMouseY, 2));
+    if (dist > dragMoveThreshold) {
+        photoPreview.dataset.wasDragged = 'true';
+    }
+
+    updatePhotoTransform(false); // Sin transición durante el arrastre
+});
+
+window.addEventListener('mouseup', () => {
+    if (isDragging) {
+        isDragging = false;
+        photoPreview.classList.remove('grabbing');
+    }
+});
+
+document.getElementById('rotate-photo-btn')?.addEventListener('click', () => {
+    currentRotation = (currentRotation + 90) % 360;
+    updatePhotoTransform(true);
+});
+
+document.getElementById('ocr-trigger-btn')?.addEventListener('click', () => {
+    const file = photoInput.files[0];
+    if (file) {
+        runOCR(file, currentRotation);
+    } else {
+        Swal.fire('Info', 'Sube una foto primero para poder escanearla.', 'info');
+    }
+});
+
+photoPreview.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    let newZoom = currentZoom + delta;
+
+    if (newZoom < 1) {
+        newZoom = 1;
+        translateX = 0;
+        translateY = 0;
+    }
+    if (newZoom > 3) newZoom = 3;
+
+    if (newZoom !== currentZoom) {
+        currentZoom = newZoom;
+        updatePhotoTransform(true);
+    }
+}, { passive: false });
+
 async function handleFileSelect() {
     const file = photoInput.files[0];
     if (!file) return;
@@ -745,8 +838,28 @@ async function handleFileSelect() {
     const blobUrl = URL.createObjectURL(file);
     photoPreview.src = blobUrl;
     photoPreview.classList.remove('hidden');
+    // Reset position, zoom and rotation on new image
+    currentZoom = 1;
+    currentRotation = 0;
+    translateX = 0;
+    translateY = 0;
+    updatePhotoTransform(false);
+
     uploadPlaceholder.classList.add('hidden');
     document.getElementById('photo-actions').classList.remove('hidden');
+
+    // Efecto de scroll automático al cargar la imagen
+    const dropZone = document.getElementById('photo-drop-zone');
+    photoPreview.onload = () => {
+        setTimeout(() => {
+            dropZone.scrollTo({
+                top: dropZone.scrollHeight,
+                behavior: 'smooth'
+            });
+            // Esperar un momento y volver arriba o simplemente dejarlo ahí
+            // El usuario suele querer ver el total que está abajo
+        }, 500);
+    };
 
     // Update "Ver Original" button
     document.getElementById('view-full-photo').href = blobUrl;
@@ -754,10 +867,41 @@ async function handleFileSelect() {
     // Start OCR conditionally
     const valType = document.querySelector('input[name="valType"]:checked')?.value;
     if (valType === 'pos' || valType === 'online') {
-        runOCR(file);
+        runOCR(file, currentRotation);
     } else {
         valPhotoAmountInput.placeholder = '0.00';
     }
+}
+
+function getRotatedBase64(file, rotation) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                if (rotation % 180 === 0) {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                } else {
+                    canvas.width = img.height;
+                    canvas.height = img.width;
+                }
+
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate((rotation * Math.PI) / 180);
+                ctx.drawImage(img, -img.width / 2, -img.height / 2);
+
+                resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 document.getElementById('remove-photo-btn').addEventListener('click', (e) => {
@@ -915,7 +1059,7 @@ function processVoucherTimes(extractedFecha, extractedHora) {
 }
 
 // OCR Logic: Google Cloud Vision for POS, Gemini -> Tesseract for Online
-async function runOCR(file) {
+async function runOCR(file, rotation = 0) {
     ocrOverlay.classList.remove('hidden');
     valPhotoAmountInput.value = '';
     valPhotoAmountInput.placeholder = 'Escaneando...';
@@ -950,8 +1094,8 @@ async function runOCR(file) {
 
             try {
                 engine = 'Google Cloud Vision';
-                console.log('[OCR] Trying Google Cloud Vision for POS...');
-                const base64 = await fileToBase64(file);
+                console.log(`[OCR] Trying Google Cloud Vision for POS (Rotation: ${rotation})...`);
+                const base64 = rotation === 0 ? await fileToBase64(file) : await getRotatedBase64(file, rotation);
 
                 const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`, {
                     method: 'POST',
@@ -993,8 +1137,8 @@ async function runOCR(file) {
             // === STRATEGY 1: Gemini Vision via Google Apps Script backend for Online ===
             if (API_URL) {
                 try {
-                    console.log('[OCR] Trying Gemini Vision via backend...');
-                    const base64 = await fileToBase64(file);
+                    console.log(`[OCR] Trying Gemini Vision via backend... (Rotation: ${rotation})`);
+                    const base64 = rotation === 0 ? await fileToBase64(file) : await getRotatedBase64(file, rotation);
                     const response = await fetchAPI('processVoucherOCR', {
                         imageBase64: base64,
                         mimeType: file.type || 'image/jpeg'
